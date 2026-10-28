@@ -1,0 +1,11 @@
+body { font-family: system-ui, sans-serif; margin: 0; background: #f5f6f8; color: #1d2330; }
+#app { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+header span { font-size: 0.8rem; color: #566; word-break: break-all; }
+.card { background: #fff; border-radius: 8px; padding: 16px; margin: 16px 0; box-shadow: 0 1px 3px #0002; }
+label { display: block; font-size: 0.85rem; margin: 6px 0; }
+input, textarea { width: 100%; box-sizing: border-box; padding: 6px; font: inherit; }
+button { padding: 6px 12px; cursor: pointer; }
+.row { display: flex; gap: 8px; margin-top: 8px; }
+.hint { color: #788; font-size: 0.85rem; }
+.msg { color: #a33; min-height: 1.2em; }
