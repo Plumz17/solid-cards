@@ -113,3 +113,34 @@ label { display: block; font-size: 0.75rem; font-weight: 900; letter-spacing: 0.
 .deck-info h2 { margin-bottom: 4px; }
 .deck-info p { margin: 0; }
 .deck-side { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+
+/* ---------- Mobile: thumb-friendly layout, not just a narrower desktop ---------- */
+@media (max-width: 560px) {
+  #app { padding: 14px 14px 40px; }
+  h1 { font-size: 1.6rem; }
+  h2 { font-size: 1.2rem; }
+  .tile { padding: 16px; }
+  .btn { min-height: 48px; }                       /* comfortable touch targets */
+  .btn-small { min-height: 44px; padding: 8px 14px; }
+  button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  .user { font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .toast { left: 16px; right: 16px; bottom: 16px; transform: none; text-align: center; }
+
+  /* Page headers: title first, then the main action(s) full width */
+  .spread { flex-wrap: wrap; }
+  .spread:has(> h1) > .btn { width: 100%; }        /* My decks: "+ New deck" */
+  .spread > .row { flex: 1 1 100%; }               /* Preview: Study + Clone */
+  .row > .btn { flex: 1; }                         /* buttons share the row width */
+  .row > .muted { flex-basis: 100%; }
+  .row .grow { flex-basis: 100%; }                 /* paste-link input gets its own line */
+
+  /* Deck row: name + badge on top, big Edit / Study buttons underneath */
+  .deck-item { display: grid; grid-template-columns: 1fr auto; align-items: start; }
+  .deck-side { display: contents; }
+  .deck-side > .row { grid-column: 1 / -1; flex-wrap: nowrap; }
+
+  /* Study: card fills the screen height, answer buttons pinned to the thumb zone */
+  .flip-face.tall { min-height: max(240px, calc(100svh - 340px)); }
+  .flip-face.tall .flash-text { font-size: 1.4rem; }
+  .flip + .segmented { position: sticky; bottom: 14px; }
+}
