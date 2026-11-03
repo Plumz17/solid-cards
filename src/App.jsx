@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ensureDecksContainer } from "./solid/pod.js";
+import { Icon } from "./components.jsx";
 import MyDecks from "./views/MyDecks.jsx";
 import DeckEditor from "./views/DeckEditor.jsx";
 import DeckPreview from "./views/DeckPreview.jsx";
@@ -31,7 +32,7 @@ export default function App() {
   return (
     <>
       <div className="topbar">
-        <button className="logo" onClick={() => go("list")}><span className="logo-mark">🃏</span>SolidCard</button>
+        <button className="logo" onClick={() => go("list")}><span className="logo-mark"><Icon name="card" /></span>SolidCard</button>
         <span className="user">Logged in as {FAKE_USER.name}</span>
       </div>
 

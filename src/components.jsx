@@ -1,4 +1,14 @@
-// Small shared pieces: loading / empty / error messages and the visibility badge.
+// Small shared pieces: icons, loading / empty / error messages and the visibility badge.
+import { FaLock, FaEarthAmericas, FaLayerGroup, FaTriangleExclamation, FaStar } from "react-icons/fa6";
+
+const ICONS = { lock: FaLock, globe: FaEarthAmericas, card: FaLayerGroup, warning: FaTriangleExclamation, star: FaStar };
+
+// Icon by name; react-icons draws it with the surrounding text color.
+export function Icon({ name }) {
+  const Glyph = ICONS[name];
+  return <Glyph className="icon" aria-hidden="true" />;
+}
+
 export function Loading({ text = "Loading…" }) {
   return (
     <div className="tile message">
@@ -8,7 +18,7 @@ export function Loading({ text = "Loading…" }) {
   );
 }
 
-export function Empty({ icon = "🃏", title, children }) {
+export function Empty({ icon = <Icon name="card" />, title, children }) {
   return (
     <div className="tile message">
       <span className="message-icon">{icon}</span>
@@ -21,7 +31,7 @@ export function Empty({ icon = "🃏", title, children }) {
 export function ErrorBox({ children, onRetry }) {
   return (
     <div className="tile message message-error">
-      <span className="message-icon">⚠️</span>
+      <span className="message-icon"><Icon name="warning" /></span>
       <p>{children}</p>
       {onRetry && <button className="btn btn-ghost btn-small" onClick={onRetry}>Try again</button>}
     </div>
@@ -29,7 +39,7 @@ export function ErrorBox({ children, onRetry }) {
 }
 
 export function VisibilityBadge({ mode }) {
-  return <span className={`badge badge-${mode}`}>{mode === "public" ? "🌍 Public" : "🔒 Private"}</span>;
+  return <span className={`badge badge-${mode}`}><Icon name={mode === "public" ? "globe" : "lock"} /> {mode === "public" ? "Public" : "Private"}</span>;
 }
 
 // Card that flips in 3D between front and back. `tall` = big study-mode size, `deal` = slide-in on mount.

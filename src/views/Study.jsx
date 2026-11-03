@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { loadDeck } from "../solid/pod.js";
-import { Loading, Empty, ErrorBox, FlipCard } from "../components.jsx";
+import { Loading, Empty, ErrorBox, FlipCard, Icon } from "../components.jsx";
 
 const shuffle = (list) => {
   const a = [...list];
@@ -55,7 +55,7 @@ export default function Study({ deckUrl, onBack }) {
 
       {queue.length === 0 ? (
         <div className="tile message">
-          <span className="message-icon">🎉</span>
+          <span className="message-icon"><Icon name="star" /></span>
           <h2>Round complete!</h2>
           <p className="muted">{misses === 0 ? "You got every card first try." : `You needed ${misses} extra ${misses === 1 ? "try" : "tries"}.`}</p>
           <div className="row" style={{ justifyContent: "center", marginTop: 12 }}>

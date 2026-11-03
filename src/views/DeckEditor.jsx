@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { loadDeck, saveDeck, deleteDeck, newDeckUrl } from "../solid/pod.js";
 import { getVisibility, setVisibility, buildLink } from "../solid/sharing.js";
-import { Loading, ErrorBox, VisibilityBadge } from "../components.jsx";
+import { Loading, ErrorBox, VisibilityBadge, Icon } from "../components.jsx";
 
 const blankDeck = () => ({ name: "", description: "", dateCreated: new Date().toISOString().slice(0, 10), cards: [{ front: "", back: "" }] });
 
@@ -84,8 +84,8 @@ export default function DeckEditor({ container, deckUrl, onOpen, onStudy, onBack
         {deckUrl ? (
           <>
             <div className="segmented">
-              <button className={`btn ${mode === "private" ? "" : "btn-ghost"}`} disabled={busy} onClick={() => changeVisibility("private")}>🔒 Private</button>
-              <button className={`btn ${mode === "public" ? "btn-amber" : "btn-ghost"}`} disabled={busy} onClick={() => changeVisibility("public")}>🌍 Public</button>
+              <button className={`btn ${mode === "private" ? "" : "btn-ghost"}`} disabled={busy} onClick={() => changeVisibility("private")}><Icon name="lock" /> Private</button>
+              <button className={`btn ${mode === "public" ? "btn-amber" : "btn-ghost"}`} disabled={busy} onClick={() => changeVisibility("public")}><Icon name="globe" /> Public</button>
             </div>
             <div className="row" style={{ marginTop: 14 }}>
               <button className="btn btn-ghost btn-small" onClick={copyLink}>Copy link</button>
