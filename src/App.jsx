@@ -5,13 +5,15 @@ import MyDecks from "./views/MyDecks.jsx";
 import DeckEditor from "./views/DeckEditor.jsx";
 import DeckPreview from "./views/DeckPreview.jsx";
 import Study from "./views/Study.jsx";
+import Login from "./views/Login.jsx";
 
-// Fake session until real login exists (login screen comes after the auth meeting).
-const FAKE_USER = { loggedIn: true, name: "anders" };
+// Mock account until real login exists.
+const MOCK_USER = { webId: "https://anders.solidcommunity.net/profile/card#me", name: "anders" };
 
 // Which screen is showing: { name: "list" | "edit" | "preview" | "study", url, from }
 // Opening an app link (?deck=...) starts on the preview.
 export default function App() {
+  const [user, setUser] = useState(null); // null = logged out
   const [container, setContainer] = useState(null);
   const [view, setView] = useState(() => {
     const deck = new URLSearchParams(window.location.search).get("deck");
@@ -19,7 +21,15 @@ export default function App() {
   });
   const [toast, setToast] = useState("");
 
-  useEffect(() => { ensureDecksContainer(FAKE_USER.name).then(setContainer); }, []);
+  useEffect(() => {
+    if (user) ensureDecksContainer(user.webId).then(setContainer);
+  }, [user]);
+
+  function logOut() {
+    setUser(null);
+    setContainer(null);
+    setView({ name: "list", url: null, from: null });
+  }
 
   function notify(text) {
     setToast(text);
@@ -33,9 +43,15 @@ export default function App() {
     <>
       <div className="topbar">
         <button className="logo" onClick={() => go("list")}><span className="logo-mark"><Icon name="card" /></span>SolidCard</button>
-        <span className="user">Logged in as {FAKE_USER.name}</span>
+        {user && (
+          <span className="user">Logged in as {user.name} <button className="btn btn-ghost btn-small" onClick={logOut}>Log out</button></span>
+        )}
       </div>
 
+      {!user && view.name !== "preview" && <Login onLogin={() => setUser(MOCK_USER)} />}
+      {!user && view.name === "preview" && (
+        <DeckPreview deckUrl={view.url} container={null} loggedIn={false} onBack={() => go("list")} notify={notify} />
+      )}
       {container && view.name === "list" && (
         <MyDecks container={container} onOpen={(u) => go("edit", u)} onNew={() => go("edit")} onPreview={(u) => go("preview", u)} onStudy={(u) => go("study", u)} />
       )}
@@ -43,7 +59,7 @@ export default function App() {
         <DeckEditor key={view.url} container={container} deckUrl={view.url} onOpen={(u) => go("edit", u)} onStudy={(u) => go("study", u)} onBack={() => go("list")} notify={notify} />
       )}
       {container && view.name === "preview" && (
-        <DeckPreview deckUrl={view.url} container={container} loggedIn={FAKE_USER.loggedIn} onBack={() => go("list")} onOpen={(u) => go("edit", u)} onStudy={(u) => go("study", u)} notify={notify} />
+        <DeckPreview deckUrl={view.url} container={container} loggedIn={true} onBack={() => go("list")} onOpen={(u) => go("edit", u)} onStudy={(u) => go("study", u)} notify={notify} />
       )}
       {container && view.name === "study" && <Study deckUrl={view.url} onBack={back} />}
       {toast && <div className="toast">{toast}</div>}
