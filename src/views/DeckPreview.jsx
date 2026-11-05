@@ -4,18 +4,21 @@ import { cloneDeck } from "../solid/clone.js";
 import { Loading, Empty, ErrorBox, FlipCard } from "../components.jsx";
 
 // Read-only view of any deck URL, with a Clone button. Tap a card to flip it.
+// `container` is the viewer's own decks folder (null when logged out): clones are saved there.
 export default function DeckPreview({ deckUrl, container, loggedIn, onBack, onOpen, onStudy, notify }) {
-  const [deck, setDeck] = useState(null);
-  const [error, setError] = useState("");
-  const [flipped, setFlipped] = useState({});
-  const [busy, setBusy] = useState(false);
+  const [deck, setDeck] = useState(null);     // the loaded deck (null while loading)
+  const [error, setError] = useState("");     // e.g. "private or not found"
+  const [flipped, setFlipped] = useState({}); // which cards are flipped, e.g. { 0: true }
+  const [busy, setBusy] = useState(false);    // true while cloning
 
+  // Load the deck whenever the URL changes.
   useEffect(() => {
     setDeck(null);
     setError("");
     loadDeck(deckUrl).then(setDeck).catch((e) => setError(e.message));
   }, [deckUrl]);
 
+  // Copy this deck into the viewer's own pod, then open the copy in the editor.
   async function clone() {
     setBusy(true);
     try {
@@ -29,10 +32,14 @@ export default function DeckPreview({ deckUrl, container, loggedIn, onBack, onOp
   return (
     <>
       <button className="btn btn-ghost btn-small" onClick={onBack}>← Back</button>
+
+      {/* Error or loading state */}
       {error && <div style={{ marginTop: 16 }}><ErrorBox>{error}</ErrorBox></div>}
       {!error && !deck && <Loading text="Fetching deck…" />}
+
       {deck && (
         <>
+          {/* Deck title and the Study / Clone buttons */}
           <div className="spread" style={{ marginTop: 16 }}>
             <div>
               <h1>{deck.name}</h1>
@@ -46,6 +53,8 @@ export default function DeckPreview({ deckUrl, container, loggedIn, onBack, onOp
               </button>
             </div>
           </div>
+
+          {/* The cards; clicking one flips just that card */}
           {deck.cards.length === 0 && <Empty title="No cards">This deck is empty.</Empty>}
           {deck.cards.map((c, i) => (
             <FlipCard key={i} front={c.front} back={c.back} flipped={!!flipped[i]} onFlip={() => setFlipped({ ...flipped, [i]: !flipped[i] })} />

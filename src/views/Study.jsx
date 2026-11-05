@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { loadDeck } from "../solid/pod.js";
 import { Loading, Empty, ErrorBox, FlipCard, Icon } from "../components.jsx";
 
+// Returns a shuffled copy of the list (Fisher-Yates: swap each item with a random earlier one).
 const shuffle = (list) => {
   const a = [...list];
   for (let i = a.length - 1; i > 0; i--) {
@@ -14,19 +15,22 @@ const shuffle = (list) => {
 // Study one deck, one card at a time. Progress lives in memory only; nothing is written to the pod.
 // "Again" sends the card to the back of the queue; the round ends when the queue is empty.
 export default function Study({ deckUrl, onBack }) {
-  const [deck, setDeck] = useState(null);
+  const [deck, setDeck] = useState(null);   // the loaded deck (null while loading)
   const [error, setError] = useState("");
   const [queue, setQueue] = useState([]);   // card indexes still to learn
-  const [flipped, setFlipped] = useState(false);
-  const [misses, setMisses] = useState(0);
-  const [step, setStep] = useState(0);    // changes per card so each one is a fresh element (deals in unflipped)
+  const [flipped, setFlipped] = useState(false); // is the current card showing its back?
+  const [misses, setMisses] = useState(0);  // how many times "Again" was pressed
+  const [step, setStep] = useState(0);      // changes per card so each one is a fresh element (deals in unflipped)
 
+  // Begin a round: shuffle all cards into the queue and reset the counters.
   const start = (d) => { setQueue(shuffle(d.cards.map((_, i) => i))); setFlipped(false); setMisses(0); };
 
+  // Load the deck, then start the first round.
   useEffect(() => {
     loadDeck(deckUrl).then((d) => { setDeck(d); start(d); }).catch((e) => setError(e.message));
   }, [deckUrl]);
 
+  // "Got it" removes the card from the queue; "Again" moves it to the back.
   function answer(gotIt) {
     const [first, ...rest] = queue;
     setQueue(gotIt ? rest : [...rest, first]);
@@ -35,25 +39,28 @@ export default function Study({ deckUrl, onBack }) {
     setStep(step + 1);
   }
 
+  // Error, loading and empty-deck screens.
   if (error) return <ErrorBox onRetry={onBack}>{error}</ErrorBox>;
   if (!deck) return <Loading text="Getting your cards…" />;
   if (deck.cards.length === 0) return <Empty title="No cards to study">Add some cards to this deck first.</Empty>;
 
   const total = deck.cards.length;
-  const learned = total - queue.length;
-  const card = deck.cards[queue[0]];
+  const learned = total - queue.length;  // cards already answered "Got it"
+  const card = deck.cards[queue[0]];     // the card to show now
 
   return (
     <>
       <button className="btn btn-ghost btn-small" onClick={onBack}>← Exit</button>
       <h1 style={{ marginTop: 16 }}>{deck.name}</h1>
 
+      {/* Progress bar: width = learned / total */}
       <div className="progress" aria-label={`${learned} of ${total} learned`}>
         <div className="progress-fill" style={{ width: `${(learned / total) * 100}%` }} />
       </div>
       <p className="muted">{learned} / {total} learned</p>
 
       {queue.length === 0 ? (
+        // Queue empty = round finished
         <div className="tile message">
           <span className="message-icon"><Icon name="star" /></span>
           <h2>Round complete!</h2>
@@ -64,6 +71,7 @@ export default function Study({ deckUrl, onBack }) {
           </div>
         </div>
       ) : (
+        // Still cards left: show the current card and the answer buttons (enabled after flipping)
         <>
           <FlipCard key={step} tall deal front={card.front} back={card.back} flipped={flipped} onFlip={() => setFlipped(!flipped)} />
           <div className="segmented">

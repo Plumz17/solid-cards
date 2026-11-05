@@ -5,11 +5,12 @@ import { Loading, Empty, ErrorBox, VisibilityBadge } from "../components.jsx";
 
 // Deck list + "Paste a deck link" field.
 export default function MyDecks({ container, onOpen, onNew, onPreview, onStudy }) {
-  const [decks, setDecks] = useState(null);
-  const [error, setError] = useState("");
-  const [link, setLink] = useState("");
+  const [decks, setDecks] = useState(null);   // null while loading, then the list of decks
+  const [error, setError] = useState("");     // message if loading failed
+  const [link, setLink] = useState("");       // text typed in the "paste a link" field
   const [linkError, setLinkError] = useState("");
 
+  // Load all decks in the folder, and look up each deck's visibility (private/public).
   const load = () => {
     setDecks(null);
     setError("");
@@ -18,8 +19,9 @@ export default function MyDecks({ container, onOpen, onNew, onPreview, onStudy }
       .then(setDecks)
       .catch((e) => setError(e.message));
   };
-  useEffect(load, [container]);
+  useEffect(load, [container]); // load once when the screen opens
 
+  // "Open" button: turn the pasted text into a deck URL and show its preview.
   function openLink(e) {
     e.preventDefault();
     const url = parseLink(link);
@@ -29,11 +31,13 @@ export default function MyDecks({ container, onOpen, onNew, onPreview, onStudy }
 
   return (
     <>
+      {/* Title and "new deck" button */}
       <div className="spread">
         <h1>My decks</h1>
         <button className="btn btn-amber" onClick={onNew}>+ New deck</button>
       </div>
 
+      {/* Paste a deck link (app link or raw deck URL) */}
       <form className="tile" onSubmit={openLink}>
         <label htmlFor="link">Paste a deck link</label>
         <div className="row">
@@ -44,9 +48,12 @@ export default function MyDecks({ container, onOpen, onNew, onPreview, onStudy }
         {linkError && <p style={{ color: "var(--coral-lip)", marginTop: 8 }}>{linkError}</p>}
       </form>
 
+      {/* Loading / error / empty states */}
       {error && <ErrorBox onRetry={load}>Couldn't load your decks. {error}</ErrorBox>}
       {!error && decks === null && <Loading text="Loading your decks…" />}
       {decks?.length === 0 && <Empty title="No decks yet">Create your first deck to get started.</Empty>}
+
+      {/* One tile per deck */}
       {decks?.map((d) => (
         <div key={d.url} className="tile deck-item">
           <div className="deck-info">

@@ -1,13 +1,14 @@
 import { useState } from "react";
-import { Icon } from "../components.jsx";
 
 // Login screen: the user picks their Solid provider. For now the button logs in as the mock user whatever is typed.
 export default function Login({ onLogin }) {
+  // The text in the provider field (real login will use it later).
   const [issuer, setIssuer] = useState("https://solidcommunity.net");
 
+  // Runs when the form is submitted (button click or Enter).
   function submit(e) {
-    e.preventDefault();
-    onLogin();
+    e.preventDefault(); // stop the browser from reloading the page
+    onLogin();          // tell App we're logged in
   }
 
   return (
