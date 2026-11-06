@@ -17,7 +17,8 @@ export default function App() {
   const [checking, setChecking] = useState(true);  // true until we know whether the user is logged in
   const [user, setUser] = useState(null);           // null = logged out, else { webId, name }
   const [container, setContainer] = useState(null); // URL of the user's decks folder (null until loaded)
-  const [containerError, setContainerError] = useState("");
+  const [containerError, setContainerError] = useState(""); // message if the decks folder could not be opened
+  const [attempt, setAttempt] = useState(0);        // bumped by "Try again" to reload the decks folder
   const [view, setView] = useState(() => {          // which screen is showing
     const deck = new URLSearchParams(window.location.search).get("deck"); // the ?deck=... part of the address
     return deck ? { name: "preview", url: deck } : { name: "list", url: null, from: null };
@@ -40,14 +41,14 @@ export default function App() {
   // When someone logs in, find their decks folder in the pod.
   useEffect(() => {
     if (!user) return;
-    let active = true;
+    let active = true; // set to false on cleanup, so an answer arriving after logout is ignored
     setContainer(null);
     setContainerError("");
     ensureDecksContainer(user.webId)
       .then((url) => { if (active) setContainer(url); })
       .catch((error) => { if (active) setContainerError(error.message); });
     return () => { active = false; };
-  }, [user]);
+  }, [user, attempt]);
 
   // Forget the user and go back to the start.
   async function logOut() {
@@ -68,6 +69,9 @@ export default function App() {
   const go = (name, url = null) => setView({ name, url, from: view });
   const back = () => setView(view.from ?? { name: "list", url: null, from: null });
 
+  // Previews and study only read a deck, so they work without a decks folder (and when logged out).
+  const readOnly = view.name === "preview" || view.name === "study";
+
   return (
     <>
       {/* Top bar: logo (goes to the list) and, when logged in, the user name + Log out */}
@@ -81,15 +85,14 @@ export default function App() {
       {/* Still checking the session */}
       {checking && <Loading text="Checking your login…" />}
 
-      {/* Logged out: login screen, or a read-only preview if a deck link was opened */}
-      {!checking && !user && view.name !== "preview" && <Login />}
-      {!checking && !user && view.name === "preview" && (
-        <DeckPreview deckUrl={view.url} container={null} loggedIn={false} onBack={() => go("list")} notify={notify} />
-      )}
+      {/* Logged out: login screen (a deck link goes straight to the read-only screens below) */}
+      {!checking && !user && !readOnly && <Login />}
 
-      {/* Logged in: show the screen named in `view` (each callback below just calls go) */}
-      {user && !container && !containerError && <Loading text="Opening your pod…" />}
-      {user && containerError && <ErrorBox>{containerError}</ErrorBox>}
+      {/* Logged in: waiting for, or failed to open, the decks folder (only the list and editor need it) */}
+      {user && !readOnly && !container && !containerError && <Loading text="Opening your pod…" />}
+      {user && !readOnly && containerError && <ErrorBox onRetry={() => setAttempt(attempt + 1)}>{containerError}</ErrorBox>}
+
+      {/* Screens that need the decks folder */}
       {container && view.name === "list" && (
         <MyDecks container={container} onOpen={(u) => go("edit", u)} onNew={() => go("edit")} onPreview={(u) => go("preview", u)} onStudy={(u) => go("study", u)} />
       )}
@@ -97,10 +100,12 @@ export default function App() {
       {container && view.name === "edit" && (
         <DeckEditor key={view.url} container={container} deckUrl={view.url} onOpen={(u) => go("edit", u)} onStudy={(u) => go("study", u)} onBack={() => go("list")} notify={notify} />
       )}
-      {container && view.name === "preview" && (
-        <DeckPreview deckUrl={view.url} container={container} loggedIn={true} onBack={() => go("list")} onOpen={(u) => go("edit", u)} onStudy={(u) => go("study", u)} notify={notify} />
+
+      {/* Read-only screens: work logged out too (Clone needs the decks folder, so it stays disabled without one) */}
+      {!checking && view.name === "preview" && (
+        <DeckPreview deckUrl={view.url} container={container} loggedIn={!!user} onBack={() => go("list")} onOpen={(u) => go("edit", u)} onStudy={(u) => go("study", u)} notify={notify} />
       )}
-      {container && view.name === "study" && <Study deckUrl={view.url} onBack={back} />}
+      {!checking && view.name === "study" && <Study deckUrl={view.url} onBack={back} />}
 
       {/* Pop-up message */}
       {toast && <div className="toast">{toast}</div>}

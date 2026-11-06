@@ -6,17 +6,29 @@ import { Loading, ErrorBox, VisibilityBadge, Icon } from "../components.jsx";
 // A new deck: empty name, today's date (YYYY-MM-DD) and one empty card.
 const blankDeck = () => ({ name: "", description: "", dateCreated: new Date().toISOString().slice(0, 10), cards: [{ front: "", back: "" }] });
 
+// Short, readable form of the original deck's URL: file name + owner, e.g. "test by alice".
+// The full URL stays available as a hover tooltip on the line that shows this.
+function describeSource(url) {
+  try {
+    const { hostname, pathname } = new URL(url);
+    const file = decodeURIComponent(pathname.split("/").pop()).replace(/\.ttl$/, "");
+    return `"${file}" by ${hostname.split(".")[0]}`;
+  } catch {
+    return url; // not a valid URL: show it as it is
+  }
+}
+
 // Edit one deck. deckUrl === null means a brand-new deck (file created on first save).
 export default function DeckEditor({ container, deckUrl, onOpen, onStudy, onBack, notify }) {
   const [deck, setDeck] = useState(deckUrl ? null : blankDeck()); // the deck being edited (null while loading)
-  const [mode, setMode] = useState("private");                    // "private" or "public"
+  const [mode, setMode] = useState("private");                    // "private", "public", or null if it could not be read
   const [error, setError] = useState("");                         // message if loading failed
   const [busy, setBusy] = useState(false);                        // true while saving, so buttons are disabled
 
   // Existing deck: load its content and visibility.
   useEffect(() => {
     if (!deckUrl) return;
-    Promise.all([loadDeck(deckUrl), getVisibility(deckUrl)])
+    Promise.all([loadDeck(deckUrl), getVisibility(deckUrl).catch(() => null)]) // no permission info is not a reason to block editing
       .then(([d, v]) => { setDeck(d); setMode(v); })
       .catch((e) => setError(e.message));
   }, [deckUrl]);
@@ -88,14 +100,14 @@ export default function DeckEditor({ container, deckUrl, onOpen, onStudy, onBack
         <input id="name" value={deck.name} onChange={(e) => setField("name", e.target.value)} />
         <label htmlFor="desc">Description</label>
         <textarea id="desc" rows={2} value={deck.description} onChange={(e) => setField("description", e.target.value)} />
-        {deck.isBasedOn && <p className="muted" style={{ marginTop: 12 }}><span className="badge badge-clone">Clone</span> based on {deck.isBasedOn}</p>}
+        {deck.isBasedOn && <p className="row muted" style={{ marginTop: 12, gap: 8, flexWrap: "nowrap" }} title={deck.isBasedOn}><span className="badge badge-clone">Clone</span><span style={{ overflowWrap: "anywhere" }}>of {describeSource(deck.isBasedOn)}</span></p>}
       </div>
 
       {/* Visibility: private/public buttons and copy link (only after the deck is saved) */}
       <div className="tile">
         <div className="spread">
           <h2>Who can see this deck?</h2>
-          {deckUrl && <VisibilityBadge mode={mode} />}
+          {deckUrl && mode && <VisibilityBadge mode={mode} />}
         </div>
         {deckUrl ? (
           <>
@@ -103,6 +115,7 @@ export default function DeckEditor({ container, deckUrl, onOpen, onStudy, onBack
               <button className={`btn ${mode === "private" ? "" : "btn-ghost"}`} disabled={busy} onClick={() => changeVisibility("private")}><Icon name="lock" /> Private</button>
               <button className={`btn ${mode === "public" ? "btn-amber" : "btn-ghost"}`} disabled={busy} onClick={() => changeVisibility("public")}><Icon name="globe" /> Public</button>
             </div>
+            {!mode && <p className="muted" style={{ marginTop: 12 }}>Couldn't read this deck's sharing settings. You can still choose one above.</p>}
             <div className="row" style={{ marginTop: 14 }}>
               <button className="btn btn-ghost btn-small" onClick={copyLink}>Copy link</button>
               <span className="muted">Anyone with a public link can read this deck.</span>

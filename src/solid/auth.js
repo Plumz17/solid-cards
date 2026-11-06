@@ -15,6 +15,8 @@ export async function getSession() {
   return { loggedIn: true, webId: info.webId, name: new URL(info.webId).hostname.split(".")[0] };
 }
 
+// The fetch to use for every pod request: it sends the user's login when there is one,
+// and works as a plain request when logged out (enough for public decks).
 export function getSolidFetch() {
   const session = getDefaultSession();
   return session.fetch.bind(session);
