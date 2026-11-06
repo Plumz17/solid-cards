@@ -8,7 +8,7 @@ import DeckEditor from "./views/DeckEditor.jsx";
 import DeckPreview from "./views/DeckPreview.jsx";
 import Study from "./views/Study.jsx";
 import Login from "./views/Login.jsx";
-import { Icon, Loading } from "./components.jsx";
+import { ErrorBox, Icon, Loading } from "./components.jsx";
 
 // Which screen is showing: { name: "list" | "edit" | "preview" | "study", url, from }
 // Opening an app link (?deck=...) starts on the preview.
@@ -17,6 +17,7 @@ export default function App() {
   const [checking, setChecking] = useState(true);  // true until we know whether the user is logged in
   const [user, setUser] = useState(null);           // null = logged out, else { webId, name }
   const [container, setContainer] = useState(null); // URL of the user's decks folder (null until loaded)
+  const [containerError, setContainerError] = useState("");
   const [view, setView] = useState(() => {          // which screen is showing
     const deck = new URLSearchParams(window.location.search).get("deck"); // the ?deck=... part of the address
     return deck ? { name: "preview", url: deck } : { name: "list", url: null, from: null };
@@ -38,7 +39,14 @@ export default function App() {
 
   // When someone logs in, find their decks folder in the pod.
   useEffect(() => {
-    if (user) ensureDecksContainer(user.webId).then(setContainer);
+    if (!user) return;
+    let active = true;
+    setContainer(null);
+    setContainerError("");
+    ensureDecksContainer(user.webId)
+      .then((url) => { if (active) setContainer(url); })
+      .catch((error) => { if (active) setContainerError(error.message); });
+    return () => { active = false; };
   }, [user]);
 
   // Forget the user and go back to the start.
@@ -46,6 +54,7 @@ export default function App() {
     await logout();
     setUser(null);
     setContainer(null);
+    setContainerError("");
     setView({ name: "list", url: null, from: null });
   }
 
@@ -79,6 +88,8 @@ export default function App() {
       )}
 
       {/* Logged in: show the screen named in `view` (each callback below just calls go) */}
+      {user && !container && !containerError && <Loading text="Opening your pod…" />}
+      {user && containerError && <ErrorBox>{containerError}</ErrorBox>}
       {container && view.name === "list" && (
         <MyDecks container={container} onOpen={(u) => go("edit", u)} onNew={() => go("edit")} onPreview={(u) => go("preview", u)} onStudy={(u) => go("study", u)} />
       )}

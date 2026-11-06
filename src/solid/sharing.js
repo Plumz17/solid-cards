@@ -1,13 +1,19 @@
-// STUB: visibility is the file's permission in the pod, so decks start "private".
-const visibility = new Map();
+import { getPublicAccess, setPublicAccess } from "@inrupt/solid-client/universal";
+import { getSolidFetch } from "./auth.js";
 
 export async function getVisibility(deckUrl) {
-  return visibility.get(deckUrl) ?? "private";
+  const access = await getPublicAccess(deckUrl, { fetch: getSolidFetch() });
+  if (!access) throw new Error("Couldn't read this deck's sharing permissions.");
+  return access.read ? "public" : "private";
 }
 
 export async function setVisibility(deckUrl, mode) {
-  await new Promise((r) => setTimeout(r, 200));
-  visibility.set(deckUrl, mode);
+  const access = await setPublicAccess(deckUrl, {
+    read: mode === "public",
+    write: false,
+    append: false,
+  }, { fetch: getSolidFetch() });
+  if (!access) throw new Error("The pod did not allow this deck's sharing permissions to be changed.");
 }
 
 // App link = this site + ?deck=<encoded deck file URL>

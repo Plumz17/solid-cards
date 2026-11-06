@@ -15,6 +15,11 @@ export async function getSession() {
   return { loggedIn: true, webId: info.webId, name: new URL(info.webId).hostname.split(".")[0] };
 }
 
+export function getSolidFetch() {
+  const session = getDefaultSession();
+  return session.fetch.bind(session);
+}
+
 // Send the user to their provider to log in (the page leaves; getSession finishes the job on return).
 // `issuer` is the provider address, e.g. https://solidcommunity.net
 export async function login(issuer) {

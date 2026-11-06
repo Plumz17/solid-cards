@@ -1,6 +1,6 @@
 import { loadDeck, saveDeck, newDeckUrl } from "./pod.js";
 
-// STUB: copy a deck into my own container as a separate file; original is untouched.
+// Copy a deck into my own container as a separate file; original is untouched.
 export async function cloneDeck(sourceUrl, myContainerUrl) {
   const source = await loadDeck(sourceUrl);
   const copy = {
@@ -8,7 +8,7 @@ export async function cloneDeck(sourceUrl, myContainerUrl) {
     dateCreated: new Date().toISOString().slice(0, 10),
     isBasedOn: sourceUrl + "#deck",
   };
-  const url = newDeckUrl(myContainerUrl, source.name);
+  const url = await newDeckUrl(myContainerUrl, source.name);
   await saveDeck(url, copy);
   return url;
 }

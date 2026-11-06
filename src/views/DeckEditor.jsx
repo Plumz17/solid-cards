@@ -35,7 +35,7 @@ export default function DeckEditor({ container, deckUrl, onOpen, onStudy, onBack
     if (!deck.name.trim()) return notify("Give your deck a name first.");
     setBusy(true);
     try {
-      const url = deckUrl ?? newDeckUrl(container, deck.name); // new deck -> make a file name from the title
+      const url = deckUrl ?? await newDeckUrl(container, deck.name); // new deck -> make a file name from the title
       await saveDeck(url, { ...deck, cards: deck.cards.filter((c) => c.front.trim() || c.back.trim()) }); // skip fully empty cards
       notify("Deck saved!");
       if (!deckUrl) onOpen(url); // after creating, switch to editing the saved deck
@@ -63,8 +63,14 @@ export default function DeckEditor({ container, deckUrl, onOpen, onStudy, onBack
   // Delete the deck (after asking). Clones owned by others are not affected.
   async function remove() {
     if (!confirm("Delete this deck? Existing clones stay with their owners.")) return;
-    await deleteDeck(deckUrl);
-    onBack();
+    setBusy(true);
+    try {
+      await deleteDeck(deckUrl);
+      onBack();
+    } catch (e) {
+      notify("Couldn't delete: " + e.message);
+    }
+    setBusy(false);
   }
 
   return (
@@ -125,7 +131,7 @@ export default function DeckEditor({ container, deckUrl, onOpen, onStudy, onBack
 
       {/* Bottom buttons */}
       <div className="row row-end" style={{ marginTop: 24 }}>
-        {deckUrl && <button className="btn btn-coral" onClick={remove}>Delete</button>}
+        {deckUrl && <button className="btn btn-coral" disabled={busy} onClick={remove}>Delete</button>}
         <button className="btn" disabled={busy} onClick={save}>Save deck</button>
       </div>
     </>

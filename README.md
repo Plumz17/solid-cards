@@ -16,7 +16,7 @@ Planned: follow other users to see their decks.
 
 ## Data
 
-One deck = one file in the pod: `<pod>/solidcard/decks/<name>.ttl`, using schema.org terms. A clone is a separate file that records its source with `isBasedOn`.
+One deck = one Turtle file in the pod: `<pod>/solidcard/decks/<name>.ttl`. The app discovers the pod's storage URL from the user's WebID profile, creates the `solidcard/decks/` containers when needed, and reads and writes deck data directly with the user's authenticated Solid session. Decks use schema.org `CreativeWork`, `Question`, and `Answer` terms; a clone is a separate file that records its source with `isBasedOn`. Public/private visibility is stored in the deck file's pod access controls.
 
 ## Stack
 
