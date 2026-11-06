@@ -1,22 +1,21 @@
 // App = the controller. It holds who is logged in, which screen is showing, and the toast message.
 // The screens themselves live in src/views/.
 import { useEffect, useState } from "react";
+import { getSession, logout, takeSavedDeck } from "./solid/auth.js";
 import { ensureDecksContainer } from "./solid/pod.js";
-import { Icon } from "./components.jsx";
 import MyDecks from "./views/MyDecks.jsx";
 import DeckEditor from "./views/DeckEditor.jsx";
 import DeckPreview from "./views/DeckPreview.jsx";
 import Study from "./views/Study.jsx";
 import Login from "./views/Login.jsx";
-
-// Mock account until real login exists.
-const MOCK_USER = { webId: "https://anders.solidcommunity.net/profile/card#me", name: "anders" };
+import { Icon, Loading } from "./components.jsx";
 
 // Which screen is showing: { name: "list" | "edit" | "preview" | "study", url, from }
 // Opening an app link (?deck=...) starts on the preview.
 export default function App() {
   // --- Things the app remembers (changing one redraws the screen) ---
-  const [user, setUser] = useState(null);           // null = logged out
+  const [checking, setChecking] = useState(true);  // true until we know whether the user is logged in
+  const [user, setUser] = useState(null);           // null = logged out, else { webId, name }
   const [container, setContainer] = useState(null); // URL of the user's decks folder (null until loaded)
   const [view, setView] = useState(() => {          // which screen is showing
     const deck = new URLSearchParams(window.location.search).get("deck"); // the ?deck=... part of the address
@@ -24,13 +23,27 @@ export default function App() {
   });
   const [toast, setToast] = useState("");           // pop-up message ("" = hidden)
 
+  // At startup: finish a login in progress or restore an earlier one.
+  useEffect(() => {
+    getSession().then((session) => {
+      if (session.loggedIn) {
+        setUser(session);
+        // The login redirect dropped the deck link; open the deck the user was looking at.
+        const deck = takeSavedDeck();
+        if (deck) setView({ name: "preview", url: deck });
+      }
+      setChecking(false);
+    });
+  }, []);
+
   // When someone logs in, find their decks folder in the pod.
   useEffect(() => {
     if (user) ensureDecksContainer(user.webId).then(setContainer);
   }, [user]);
 
   // Forget the user and go back to the start.
-  function logOut() {
+  async function logOut() {
+    await logout();
     setUser(null);
     setContainer(null);
     setView({ name: "list", url: null, from: null });
@@ -56,9 +69,12 @@ export default function App() {
         )}
       </div>
 
+      {/* Still checking the session */}
+      {checking && <Loading text="Checking your login…" />}
+
       {/* Logged out: login screen, or a read-only preview if a deck link was opened */}
-      {!user && view.name !== "preview" && <Login onLogin={() => setUser(MOCK_USER)} />}
-      {!user && view.name === "preview" && (
+      {!checking && !user && view.name !== "preview" && <Login />}
+      {!checking && !user && view.name === "preview" && (
         <DeckPreview deckUrl={view.url} container={null} loggedIn={false} onBack={() => go("list")} notify={notify} />
       )}
 
