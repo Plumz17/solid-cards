@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { listDecks } from "../solid/pod.js";
-import { getVisibility, parseLink } from "../solid/sharing.js";
-import { Loading, Empty, ErrorBox, VisibilityBadge } from "../components.jsx";
+import { parseLink } from "../solid/sharing.js";
+import { Loading, Empty, ErrorBox } from "../components.jsx";
 
 // Deck list + "Paste a deck link" field.
 export default function MyDecks({ container, onOpen, onNew, onPreview, onStudy }) {
@@ -10,14 +10,11 @@ export default function MyDecks({ container, onOpen, onNew, onPreview, onStudy }
   const [link, setLink] = useState("");       // text typed in the "paste a link" field
   const [linkError, setLinkError] = useState("");
 
-  // Load all decks in the folder, and look up each deck's visibility (private/public).
+  // Load deck content only; permission checks are handled from the editor on demand.
   const load = () => {
     setDecks(null);
     setError("");
-    listDecks(container)
-      .then((list) => Promise.all(list.map(async (d) => ({ ...d, visibility: await getVisibility(d.url) }))))
-      .then(setDecks)
-      .catch((e) => setError(e.message));
+    listDecks(container).then(setDecks).catch((e) => setError(e.message));
   };
   useEffect(load, [container]); // load once when the screen opens
 
@@ -62,9 +59,9 @@ export default function MyDecks({ container, onOpen, onNew, onPreview, onStudy }
               {d.cardCount} card{d.cardCount === 1 ? "" : "s"}
               {d.isBasedOn && <> · <span className="badge badge-clone">Clone</span></>}
             </p>
+            <p className="muted">Sharing settings are in Edit.</p>
           </div>
           <div className="deck-side">
-            <VisibilityBadge mode={d.visibility} />
             <div className="row">
               <button className="btn btn-ghost btn-small" onClick={() => onOpen(d.url)}>✎ Edit</button>
               <button className="btn btn-amber btn-small" disabled={d.cardCount === 0} onClick={() => onStudy(d.url)}>▶ Study</button>
