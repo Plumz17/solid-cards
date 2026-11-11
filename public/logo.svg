@@ -1,0 +1,13 @@
+<!-- SolidCard logo: two stacked flashcards (blue behind, white in front) with an "S" for Solid, on an amber tile. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="SolidCard logo">
+  <!-- Amber tile with a darker bottom edge, like the app's buttons -->
+  <rect x="2" y="6" width="60" height="56" rx="16" fill="#c98500"/>
+  <rect x="2" y="2" width="60" height="56" rx="16" fill="#ffb81c"/>
+  <!-- Card behind, tilted one way -->
+  <rect x="17" y="11" width="30" height="38" rx="6" fill="#2b5bff" transform="rotate(14 32 30)"/>
+  <!-- Card in front, tilted the other way, with the S drawn as one thick curved line -->
+  <g transform="rotate(-6 32 30)">
+    <rect x="17" y="11" width="30" height="38" rx="6" fill="#ffffff"/>
+    <path d="M39 22 C39 17 25 17 25 23 C25 29 39 30 39 37 C39 43 25 43 25 38" fill="none" stroke="#1e2247" stroke-width="6.5" stroke-linecap="round"/>
+  </g>
+</svg>

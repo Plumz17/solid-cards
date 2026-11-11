@@ -8,7 +8,7 @@ import DeckEditor from "./views/DeckEditor.jsx";
 import DeckPreview from "./views/DeckPreview.jsx";
 import Study from "./views/Study.jsx";
 import Login from "./views/Login.jsx";
-import { ErrorBox, Icon, Loading } from "./components.jsx";
+import { ErrorBox, Loading } from "./components.jsx";
 
 // Which screen is showing: { name: "list" | "edit" | "preview" | "study", url, from }
 // Opening an app link (?deck=...) starts on the preview.
@@ -76,7 +76,7 @@ export default function App() {
     <>
       {/* Top bar: logo (goes to the list) and, when logged in, the user name + Log out */}
       <div className="topbar">
-        <button className="logo" onClick={() => go("list")}><span className="logo-mark"><Icon name="card" /></span>SolidCard</button>
+        <button className="logo" onClick={() => go("list")}><img className="logo-mark" src={import.meta.env.BASE_URL + "logo.svg"} alt="" />SolidCard</button>
         {user && (
           <span className="user">Logged in as {user.name} <button className="btn btn-ghost btn-small" onClick={logOut}>Log out</button></span>
         )}
