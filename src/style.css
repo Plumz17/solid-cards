@@ -52,6 +52,7 @@ input, textarea {
   width: 100%; font: inherit; font-weight: 600; color: var(--ink);
   background: var(--surface); border: 2px solid var(--border); border-bottom: 4px solid var(--border-lip);
   border-radius: 12px; padding: 12px 14px;
+  resize:vertical;
 }
 input:focus, textarea:focus { outline: none; border-color: var(--blue); border-bottom-color: var(--blue-lip); }
 label { display: block; font-size: 0.75rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 12px 0 6px; }
