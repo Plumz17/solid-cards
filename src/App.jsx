@@ -78,7 +78,7 @@ export default function App() {
       <div className="topbar">
         <button className="logo" onClick={() => go("list")}><img className="logo-mark" src={import.meta.env.BASE_URL + "logo.svg"} alt="" />SolidCard</button>
         {user && (
-          <span className="user">Logged in as {user.name} <button className="btn btn-ghost btn-small" onClick={logOut}>Log out</button></span>
+          <span className="user"><span className="user-name">Logged in as {user.name}</span><button className="btn btn-ghost btn-small" onClick={logOut}>Log out</button></span>
         )}
       </div>
 

@@ -125,7 +125,16 @@ export async function listDecks(containerUrl) {
 
 // Download one deck file. Rejects (with a message) if it is private, missing or not a deck.
 export async function loadDeck(deckUrl) {
-  const dataset = await getSolidDataset(deckUrl, { fetch: getSolidFetch() });
+  let dataset;
+  try {
+    dataset = await getSolidDataset(deckUrl, { fetch: getSolidFetch() });
+  } catch (error) {
+    // The library's own message is long and technical; say what it means for the user instead.
+    const status = error.response?.status;
+    if (status === 401 || status === 403) throw new Error("This deck is private. Ask its owner to make it public, or log in with an account that can see it.");
+    if (status === 404) throw new Error("This deck doesn't exist. The link may be wrong, or the deck was deleted.");
+    throw new Error("Couldn't open this deck. Check the link and your connection.");
+  }
   return getDeckData(dataset, deckUrl);
 }
 

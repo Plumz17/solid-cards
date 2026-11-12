@@ -22,8 +22,22 @@ export default function Study({ deckUrl, onBack }) {
   const [misses, setMisses] = useState(0);  // how many times "Again" was pressed
   const [step, setStep] = useState(0);      // changes per card so each one is a fresh element (deals in unflipped)
 
-  // Begin a round: shuffle all cards into the queue and reset the counters.
-  const start = (d) => { setQueue(shuffle(d.cards.map((_, i) => i))); setFlipped(false); setMisses(0); };
+  const [inOrder, setInOrder] = useState(false); // true = study in the deck's own order instead of shuffled
+
+  // Begin a round: put all cards into the queue (shuffled unless in order) and reset the counters.
+  const start = (d, ordered = inOrder) => {
+    const indexes = d.cards.map((_, i) => i);
+    setQueue(ordered ? indexes : shuffle(indexes));
+    setFlipped(false);
+    setMisses(0);
+  };
+
+  // Switching the option restarts the round so it takes effect right away.
+  function changeOrder(ordered) {
+    setInOrder(ordered);
+    start(deck, ordered);
+    setStep(step + 1);
+  }
 
   // Load the deck, then start the first round.
   useEffect(() => {
@@ -57,7 +71,13 @@ export default function Study({ deckUrl, onBack }) {
       <div className="progress" aria-label={`${learned} of ${total} learned`}>
         <div className="progress-fill" style={{ width: `${(learned / total) * 100}%` }} />
       </div>
-      <p className="muted">{learned} / {total} learned</p>
+      <div className="spread" style={{ alignItems: "center" }}>
+        <p className="muted">{learned} / {total} learned</p>
+        <label className="row muted" style={{ gap: 6, flexWrap: "nowrap", margin: 0 }}>
+          <input type="checkbox" style={{ width: "auto", margin: 0 }} checked={inOrder} onChange={(e) => changeOrder(e.target.checked)} />
+          Keep deck order
+        </label>
+      </div>
 
       {queue.length === 0 ? (
         // Queue empty = round finished

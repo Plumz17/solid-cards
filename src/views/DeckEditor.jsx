@@ -41,6 +41,11 @@ export default function DeckEditor({ container, deckUrl, onOpen, onStudy, onBack
   const setCard = (i, key, value) => setField("cards", deck.cards.map((c, j) => (j === i ? { ...c, [key]: value } : c))); // change one card
   const addCard = () => setField("cards", [...deck.cards, { front: "", back: "" }]);   // add an empty card
   const removeCard = (i) => setField("cards", deck.cards.filter((_, j) => j !== i));   // remove card number i
+  const moveCard = (i, step) => {                                                       // move card i up (-1) or down (+1)
+    const cards = [...deck.cards];
+    [cards[i], cards[i + step]] = [cards[i + step], cards[i]];                          // swap with its neighbour
+    setField("cards", cards);
+  };
 
   // Save the deck to the pod (creates the file the first time).
   async function save() {
@@ -132,7 +137,11 @@ export default function DeckEditor({ container, deckUrl, onOpen, onStudy, onBack
         <div className="tile" key={i}>
           <div className="spread">
             <span className="card-num">#{i + 1}</span>
-            <button className="btn btn-coral btn-small" onClick={() => removeCard(i)} aria-label={`Remove card ${i + 1}`}>✕</button>
+            <div className="row" style={{ gap: 6 }}>
+              <button className="btn btn-ghost btn-small" disabled={i === 0} onClick={() => moveCard(i, -1)} aria-label={`Move card ${i + 1} up`}>▲</button>
+              <button className="btn btn-ghost btn-small" disabled={i === deck.cards.length - 1} onClick={() => moveCard(i, 1)} aria-label={`Move card ${i + 1} down`}>▼</button>
+              <button className="btn btn-coral btn-small" onClick={() => removeCard(i)} aria-label={`Remove card ${i + 1}`}>✕</button>
+            </div>
           </div>
           <label>Front</label>
           <input value={c.front} onChange={(e) => setCard(i, "front", e.target.value)} />
