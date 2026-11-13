@@ -93,6 +93,13 @@ label { display: block; font-size: 0.75rem; font-weight: 900; letter-spacing: 0.
 /* ---------- Flashcards ---------- */
 .flash-side { display: block; font-size: 0.7rem; font-weight: 900; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .flash-text { display: block; font-size: 1.15rem; font-weight: 800; }
+.card-image { display: block; max-width: 100%; max-height: 140px; object-fit: contain; border-radius: 12px; margin: 8px auto; }
+.flip-face.tall .card-image { max-height: 160px; }
+.image-help { font-size: 0.8rem; margin-top: 6px; }
+.image-editor { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 10px; }
+.image-editor .card-image { margin: 8px 0; }
+.image-remove { flex: 0 0 40px; width: 40px; height: 40px; padding: 0; font-size: 1.2rem; line-height: 1; }
+.image-unavailable, .image-loading { display: block; color: var(--muted); font-size: 0.85rem; margin: 8px 0; }
 
 /* 3D flip: two faces stacked in one grid cell, the wrapper rotates 180deg on Y.
    The overshoot easing makes the card snap over with a little bounce. */
@@ -100,9 +107,9 @@ label { display: block; font-size: 0.75rem; font-weight: 900; letter-spacing: 0.
 .flip:active { transform: translateY(3px); }
 .flip-inner { display: grid; transform-style: preserve-3d; transition: transform 0.65s cubic-bezier(0.34, 1.45, 0.5, 1); }
 .flip.is-flipped .flip-inner { transform: rotateY(180deg); }
-.flip-face { grid-area: 1 / 1; margin: 0; min-height: 96px; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.flip-face { grid-area: 1 / 1; margin: 0; min-height: 96px; text-align: center; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
 .flip-back { transform: rotateY(180deg); background: var(--amber-tint); border-color: var(--amber); border-bottom-color: var(--amber-lip); }
-.flip-face.tall { min-height: 240px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 8px; }
+.flip-face.tall { min-height: 240px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; }
 .flip-face.tall .flash-text { font-size: 1.6rem; }
 .flip.deal { animation: deal 0.4s cubic-bezier(0.34, 1.45, 0.5, 1); }
 @keyframes deal { from { opacity: 0; transform: translateY(28px) rotate(-4deg) scale(0.94); } }

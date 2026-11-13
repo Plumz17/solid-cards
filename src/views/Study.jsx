@@ -93,7 +93,7 @@ export default function Study({ deckUrl, onBack }) {
       ) : (
         // Still cards left: show the current card and the answer buttons (enabled after flipping)
         <>
-          <FlipCard key={step} tall deal front={card.front} back={card.back} flipped={flipped} onFlip={() => setFlipped(!flipped)} />
+          <FlipCard key={step} tall deal front={card.front} back={card.back} image={card.image} backImage={card.backImage} flipped={flipped} onFlip={() => setFlipped(!flipped)} />
           <div className="segmented">
             <button className="btn btn-coral" disabled={!flipped} onClick={() => answer(false)}>Again</button>
             <button className="btn" disabled={!flipped} onClick={() => answer(true)}>Got it</button>

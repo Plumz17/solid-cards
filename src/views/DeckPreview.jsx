@@ -57,7 +57,7 @@ export default function DeckPreview({ deckUrl, container, loggedIn, onBack, onOp
           {/* The cards; clicking one flips just that card */}
           {deck.cards.length === 0 && <Empty title="No cards">This deck is empty.</Empty>}
           {deck.cards.map((c, i) => (
-            <FlipCard key={i} front={c.front} back={c.back} flipped={!!flipped[i]} onFlip={() => setFlipped({ ...flipped, [i]: !flipped[i] })} />
+            <FlipCard key={i} front={c.front} back={c.back} image={c.image} backImage={c.backImage} flipped={!!flipped[i]} onFlip={() => setFlipped({ ...flipped, [i]: !flipped[i] })} />
           ))}
         </>
       )}

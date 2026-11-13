@@ -1,5 +1,6 @@
 import { getPublicAccess, setPublicAccess } from "@inrupt/solid-client/universal";
 import { getSolidFetch } from "./auth.js";
+import { syncDeckImagesAccess } from "./pod.js";
 
 // Visibility is the file's permission in the pod, not something stored in the deck.
 // Is the deck readable by everyone? -> "public" or "private"
@@ -11,12 +12,18 @@ export async function getVisibility(deckUrl) {
 
 // Make the deck public (everyone can read, nobody else can change it) or private (owner only).
 export async function setVisibility(deckUrl, mode) {
-  const access = await setPublicAccess(deckUrl, {
-    read: mode === "public",
-    write: false,
-    append: false,
-  }, { fetch: getSolidFetch() });
-  if (!access) throw new Error("The pod did not allow this deck's sharing permissions to be changed.");
+  const fetch = getSolidFetch();
+  await syncDeckImagesAccess(deckUrl, mode === "public");
+  const updateDeckAccess = async () => {
+    const access = await setPublicAccess(deckUrl, {
+      read: mode === "public",
+      write: false,
+      append: false,
+    }, { fetch });
+    if (!access) throw new Error("The pod did not allow this deck's sharing permissions to be changed.");
+  };
+
+  await updateDeckAccess();
 }
 
 // App link = this site + ?deck=<encoded deck file URL>

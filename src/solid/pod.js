@@ -1,31 +1,50 @@
 import {
   buildThing,
   createContainerAt,
+  createAclFromFallbackAcl,
   createSolidDataset,
   deleteContainer,
   deleteFile,
   getContainedResourceUrlAll,
   getDate,
+  getFallbackAcl,
+  getFile,
   getInteger,
+  getResourceAcl,
+  getSourceUrl,
   getSolidDataset,
+  getSolidDatasetWithAcl,
   getStringNoLocale,
+  hasAccessibleAcl,
+  hasFallbackAcl,
   getThing,
   getThingAll,
   getUrl,
   getUrlAll,
   removeThing,
+  saveFileInContainer,
   saveSolidDatasetAt,
+  saveAclFor,
+  setPublicDefaultAccess,
   setThing,
 } from "@inrupt/solid-client";
+import { getPublicAccess, setPublicAccess } from "@inrupt/solid-client/universal";
 import { getSolidFetch } from "./auth.js";
 
 // Pod access: the only place decks are read from and written to the pod. Everything returned to the
 // screens is a plain object; the Turtle/RDF details stay inside this file.
-// Deck shape: { name, description, dateCreated, isBasedOn?, cards: [{ front, back }] }
+// Deck shape: { name, description, dateCreated, isBasedOn?, cards: [{ front, back, image?, backImage? }] }
 
 const STORAGE = "http://www.w3.org/ns/pim/space#storage"; // profile field that points to the pod root
 const SCHEMA = "https://schema.org/";                     // vocabulary used for decks and cards
 const DECK_SUFFIX = "#deck";                              // the deck itself is the "#deck" entry of its file
+const IMAGE_TYPES = new Map([
+  ["image/jpeg", "jpg"],
+  ["image/png", "png"],
+  ["image/gif", "gif"],
+  ["image/webp", "webp"],
+]);
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
 // Does something exist at this URL? true = yes, false = 404, anything else (e.g. 403) is an error.
 async function resourceExists(url, fetch) {
@@ -42,6 +61,108 @@ async function resourceExists(url, fetch) {
 async function ensureContainer(url, fetch) {
   if (await resourceExists(url, fetch)) return;
   await createContainerAt(url, { fetch });
+}
+
+function getDeckFolderInfo(deckUrl) {
+  const parsed = new URL(deckUrl);
+  const parentUrl = new URL(".", parsed);
+  if (!/\/solidcard\/decks\/[^/]+\/$/.test(parentUrl.pathname)) {
+    throw new Error("Decks must be stored in their own folder under solidcard/decks/.");
+  }
+  return { folderUrl: parentUrl.href };
+}
+
+function isOwnedDeckImage(deckUrl, imageUrl) {
+  const { folderUrl } = getDeckFolderInfo(deckUrl);
+  const folder = new URL(folderUrl);
+  const image = new URL(imageUrl);
+  return image.origin === folder.origin && image.pathname.startsWith(folder.pathname);
+}
+
+export function validateDeckImage(file) {
+  if (!IMAGE_TYPES.has(file.type)) {
+    throw new Error("Choose a JPEG, PNG, GIF, or WebP image.");
+  }
+  if (file.size > MAX_IMAGE_SIZE) {
+    throw new Error("Images must be 5 MB or smaller.");
+  }
+}
+
+export async function uploadDeckImage(deckUrl, file) {
+  validateDeckImage(file);
+  const fetch = getSolidFetch();
+  const { folderUrl } = getDeckFolderInfo(deckUrl);
+  await ensureContainer(folderUrl, fetch);
+
+  const deckExists = await resourceExists(deckUrl, fetch);
+  if (deckExists) {
+    const deckAccess = await getPublicAccess(deckUrl, { fetch });
+    if (deckAccess) await setDeckImagesDefaultAccess(deckUrl, deckAccess.read);
+  } else {
+    await setDeckImagesDefaultAccess(deckUrl, false);
+  }
+
+  const filename = `image-${crypto.randomUUID()}.${IMAGE_TYPES.get(file.type)}`;
+  const upload = new File([file], filename, { type: file.type });
+  const savedFile = await saveFileInContainer(folderUrl, upload, { fetch });
+  return getSourceUrl(savedFile);
+}
+
+export async function setDeckImagesDefaultAccess(deckUrl, readable) {
+  const fetch = getSolidFetch();
+  const { folderUrl } = getDeckFolderInfo(deckUrl);
+  await ensureContainer(folderUrl, fetch);
+  const folder = await getSolidDatasetWithAcl(folderUrl, { fetch });
+  if (!hasAccessibleAcl(folder)) {
+    throw new Error(`Couldn't access the permissions for deck folder ${folderUrl}.`);
+  }
+
+  let acl = getResourceAcl(folder);
+  if (!acl) {
+    if (!hasFallbackAcl(folder) || !getFallbackAcl(folder)) {
+      throw new Error(`Couldn't find an editable access-control list for deck folder ${folderUrl}.`);
+    }
+    acl = createAclFromFallbackAcl(folder);
+  }
+
+  const updatedAcl = setPublicDefaultAccess(acl, {
+    read: readable,
+    write: false,
+    append: false,
+    control: false,
+  });
+  await saveAclFor(folder, updatedAcl, { fetch });
+}
+
+export async function syncDeckImagesAccess(deckUrl, readable) {
+  const imageUrls = await getDeckImageUrls(deckUrl);
+  if (imageUrls.length) await setDeckImagesDefaultAccess(deckUrl, readable);
+}
+
+export async function copyDeckImage(imageUrl, targetDeckUrl) {
+  const file = await getFile(imageUrl, { fetch: getSolidFetch() });
+  const copy = new File([file], "image", { type: file.type });
+  return uploadDeckImage(targetDeckUrl, copy);
+}
+
+export async function deleteDeckImage(deckUrl, imageUrl) {
+  if (!isOwnedDeckImage(deckUrl, imageUrl)) return;
+  await deleteFile(imageUrl, { fetch: getSolidFetch() });
+}
+
+export async function getDeckImageUrls(deckUrl) {
+  const dataset = await getSolidDataset(deckUrl, { fetch: getSolidFetch() });
+  const deckThing = getThing(dataset, `${deckUrl}${DECK_SUFFIX}`);
+  if (!deckThing) throw new Error("This file is not a SolidCard deck.");
+  return getUrlAll(deckThing, `${SCHEMA}hasPart`)
+    .map((url) => getThing(dataset, url))
+    .filter(Boolean)
+    .flatMap((card) => {
+      const answerUrl = getUrl(card, `${SCHEMA}acceptedAnswer`);
+      const answer = answerUrl && getThing(dataset, answerUrl);
+      return [getUrl(card, `${SCHEMA}image`), answer && getUrl(answer, `${SCHEMA}image`)];
+    })
+    .filter((url) => url && isOwnedDeckImage(deckUrl, url));
 }
 
 // Find the user's pod and make sure <pod>/solidcard/decks/ exists. -> URL of the decks folder
@@ -79,14 +200,18 @@ function getDeckData(dataset, deckUrl) {
       if (!card) throw new Error(`Deck card data is missing from ${deckUrl}.`);
       const answerUrl = getUrl(card, `${SCHEMA}acceptedAnswer`);
       const answer = answerUrl && getThing(dataset, answerUrl);
+      const imageUrl = getUrl(card, `${SCHEMA}image`);
+      const backImageUrl = answer && getUrl(answer, `${SCHEMA}image`);
       return {
         position: getInteger(card, `${SCHEMA}position`) ?? Number.MAX_SAFE_INTEGER,
         front: getStringNoLocale(card, `${SCHEMA}text`) ?? "",
         back: answer ? getStringNoLocale(answer, `${SCHEMA}text`) ?? "" : "",
+        image: imageUrl && isOwnedDeckImage(deckUrl, imageUrl) ? imageUrl : undefined,
+        backImage: backImageUrl && isOwnedDeckImage(deckUrl, backImageUrl) ? backImageUrl : undefined,
       };
     })
     .sort((a, b) => a.position - b.position) // keep the cards in their saved order
-    .map(({ front, back }) => ({ front, back }));
+    .map(({ front, back, image, backImage }) => ({ front, back, image, backImage }));
 
   // Missing fields become empty values so the screens never get undefined text.
   return {
@@ -103,9 +228,9 @@ export async function listDecks(containerUrl) {
   const fetch = getSolidFetch();
   // A folder is a dataset too; it lists the files inside it. Only .ttl files can be decks.
   const container = await getSolidDataset(containerUrl, { fetch });
-  const resources = getContainedResourceUrlAll(container);
-  const urls = resources.filter((url) => url.toLowerCase().endsWith(".ttl"));
-  const deckFolders = resources.filter((url) => new URL(url).pathname.endsWith("/"));
+  const deckFolders = getContainedResourceUrlAll(container)
+    .filter((url) => new URL(url).pathname.endsWith("/"));
+  const urls = [];
   for (const folderUrl of deckFolders) {
     const folder = await getSolidDataset(folderUrl, { fetch });
     urls.push(...getContainedResourceUrlAll(folder)
@@ -132,6 +257,7 @@ export async function listDecks(containerUrl) {
 
 // Download one deck file. Rejects (with a message) if it is private, missing or not a deck.
 export async function loadDeck(deckUrl) {
+  getDeckFolderInfo(deckUrl);
   let dataset;
   try {
     dataset = await getSolidDataset(deckUrl, { fetch: getSolidFetch() });
@@ -161,18 +287,17 @@ function makeDeckThings(deckUrl, deck) {
     const cardUrl = `${deckUrl}#card-${index + 1}`;
     const answerUrl = `${deckUrl}#answer-${index + 1}`;
     deckThing.addUrl(`${SCHEMA}hasPart`, cardUrl);
-    things.push(
-      buildThing({ url: cardUrl })
-        .addUrl("http://www.w3.org/1999/02/22-rdf-syntax-ns#type", `${SCHEMA}Question`)
-        .setStringNoLocale(`${SCHEMA}text`, card.front)
-        .setInteger(`${SCHEMA}position`, index + 1)
-        .setUrl(`${SCHEMA}acceptedAnswer`, answerUrl)
-        .build(),
-      buildThing({ url: answerUrl })
-        .addUrl("http://www.w3.org/1999/02/22-rdf-syntax-ns#type", `${SCHEMA}Answer`)
-        .setStringNoLocale(`${SCHEMA}text`, card.back)
-        .build(),
-    );
+    const cardThing = buildThing({ url: cardUrl })
+      .addUrl("http://www.w3.org/1999/02/22-rdf-syntax-ns#type", `${SCHEMA}Question`)
+      .setStringNoLocale(`${SCHEMA}text`, card.front)
+      .setInteger(`${SCHEMA}position`, index + 1)
+      .setUrl(`${SCHEMA}acceptedAnswer`, answerUrl);
+    if (card.image) cardThing.setUrl(`${SCHEMA}image`, card.image);
+    const answerThing = buildThing({ url: answerUrl })
+      .addUrl("http://www.w3.org/1999/02/22-rdf-syntax-ns#type", `${SCHEMA}Answer`)
+      .setStringNoLocale(`${SCHEMA}text`, card.back);
+    if (card.backImage) answerThing.setUrl(`${SCHEMA}image`, card.backImage);
+    things.push(cardThing.build(), answerThing.build());
   });
   things[0] = deckThing.build(); // rebuild the deck entry, now that it links to all its cards
   return things;
@@ -180,8 +305,10 @@ function makeDeckThings(deckUrl, deck) {
 
 // Save a deck to its file. Creates the file the first time, replaces the content afterwards.
 export async function saveDeck(deckUrl, deck) {
+  getDeckFolderInfo(deckUrl);
   const fetch = getSolidFetch();
   let dataset;
+  let existingDeck = true;
   try {
     // Existing file: load it and remove all old entries, so deleted cards don't linger.
     dataset = await getSolidDataset(deckUrl, { fetch });
@@ -192,9 +319,16 @@ export async function saveDeck(deckUrl, deck) {
   } catch (error) {
     if (error.response?.status !== 404) throw error; // only "file not found" means a new deck
     dataset = createSolidDataset();                  // a brand-new, empty file
+    existingDeck = false;
   }
 
-  // Add the new entries and upload the file.
+  const hasImages = deck.cards.some((card) => card.image && isOwnedDeckImage(deckUrl, card.image));
+  if (hasImages && existingDeck) {
+    const currentAccess = await getPublicAccess(deckUrl, { fetch });
+    if (currentAccess) await setDeckImagesDefaultAccess(deckUrl, currentAccess.read);
+  }
+
+  // Add the new entries and upload the file after image permissions are ready.
   dataset = makeDeckThings(deckUrl, deck).reduce(setThing, dataset);
   await saveSolidDatasetAt(deckUrl, dataset, { fetch });
 }
@@ -202,12 +336,14 @@ export async function saveDeck(deckUrl, deck) {
 // Delete the deck's file from the pod.
 export async function deleteDeck(deckUrl) {
   const fetch = getSolidFetch();
+  const { folderUrl } = getDeckFolderInfo(deckUrl);
+  const imageUrls = await getDeckImageUrls(deckUrl);
+  for (const imageUrl of imageUrls) {
+    await deleteFile(imageUrl, { fetch });
+  }
   await deleteFile(deckUrl, { fetch });
 
-  const deckPath = new URL(deckUrl).pathname;
-  if (/\/solidcard\/decks\/[^/]+\/[^/]+$/.test(deckPath)) {
-    await deleteContainer(new URL(".", deckUrl).href, { fetch });
-  }
+  await deleteContainer(folderUrl, { fetch });
 }
 
 // Pick a file URL for a new deck: the name as a readable file name, with _2, _3... if it is taken.
@@ -219,9 +355,7 @@ export async function newDeckUrl(containerUrl, name) {
   for (let suffix = 1; ; suffix++) {
     const folderName = suffix === 1 ? slug : `${slug}_${suffix}`;
     const folderUrl = new URL(`${folderName}/`, baseUrl).href;
-    const legacyFileUrl = new URL(`${folderName}.ttl`, baseUrl).href;
     if (await resourceExists(folderUrl, fetch)) continue;
-    if (await resourceExists(legacyFileUrl, fetch)) continue;
 
     await createContainerAt(folderUrl, { fetch });
     return new URL(`${folderName}.ttl`, folderUrl).href;

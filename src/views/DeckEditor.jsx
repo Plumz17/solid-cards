@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { loadDeck, saveDeck, deleteDeck, newDeckUrl } from "../solid/pod.js";
+import { loadDeck, saveDeck, deleteDeck, deleteDeckImage, newDeckUrl, uploadDeckImage, validateDeckImage } from "../solid/pod.js";
 import { getVisibility, setVisibility, buildLink } from "../solid/sharing.js";
-import { Loading, ErrorBox, VisibilityBadge, Icon } from "../components.jsx";
+import { DeckImage, Loading, ErrorBox, VisibilityBadge, Icon } from "../components.jsx";
 
 // A new deck: empty name, today's date (YYYY-MM-DD) and one empty card.
 const blankDeck = () => ({ name: "", description: "", dateCreated: new Date().toISOString().slice(0, 10), cards: [{ front: "", back: "" }] });
@@ -51,12 +51,55 @@ export default function DeckEditor({ container, deckUrl, onOpen, onStudy, onBack
   async function save() {
     if (!deck.name.trim()) return notify("Give your deck a name first.");
     setBusy(true);
+    let saved = false;
+    let imageDeckUrl = deckUrl;
+    const uploadedImages = [];
     try {
       const url = deckUrl ?? await newDeckUrl(container, deck.name); // new deck -> make a folder and file name from the title
-      await saveDeck(url, { ...deck, cards: deck.cards.filter((c) => c.front.trim() || c.back.trim()) }); // skip fully empty cards
+      imageDeckUrl = url;
+      const cards = [];
+      const savedCardsByIndex = new Map();
+      for (const [index, card] of deck.cards.entries()) {
+        const savedCard = { ...card };
+        for (const [imageKey, fileKey] of [["image", "imageFile"], ["backImage", "backImageFile"]]) {
+          if (!savedCard[fileKey]) continue;
+          savedCard[imageKey] = await uploadDeckImage(url, savedCard[fileKey]);
+          uploadedImages.push(savedCard[imageKey]);
+          delete savedCard[fileKey];
+        }
+        if (!(savedCard.front.trim() || savedCard.back.trim() || savedCard.image || savedCard.backImage)) continue;
+        cards.push(savedCard);
+        savedCardsByIndex.set(index, savedCard);
+      }
+      await saveDeck(url, { ...deck, cards });
+      saved = true;
+      setDeck({
+        ...deck,
+        cards: deck.cards.map((card, index) => savedCardsByIndex.get(index) ?? card),
+      });
+
+      const retainedImages = new Set(cards.flatMap((card) => [card.image, card.backImage]).filter(Boolean));
+      const oldImages = deck.cards.flatMap((card) => [card.image, card.backImage]).filter(Boolean);
+      for (const oldImage of new Set(oldImages)) {
+        if (!retainedImages.has(oldImage)) await deleteDeckImage(url, oldImage);
+      }
       notify("Deck saved!");
       if (!deckUrl) onOpen(url); // after creating, switch to editing the saved deck
-    } catch (e) { notify("Couldn't save: " + e.message); }
+    } catch (e) {
+      if (saved) {
+        notify("Deck saved, but an old image couldn't be removed: " + e.message);
+      } else {
+        const cleanupErrors = [];
+        if (imageDeckUrl) {
+          for (const image of uploadedImages) {
+            try { await deleteDeckImage(imageDeckUrl, image); }
+            catch (cleanupError) { cleanupErrors.push(cleanupError.message); }
+          }
+        }
+        const cleanupMessage = cleanupErrors.length ? ` Image cleanup failed: ${cleanupErrors.join("; ")}` : "";
+        notify("Couldn't save: " + e.message + cleanupMessage);
+      }
+    }
     setBusy(false);
   }
 
@@ -147,6 +190,50 @@ export default function DeckEditor({ container, deckUrl, onOpen, onStudy, onBack
           <input value={c.front} onChange={(e) => setCard(i, "front", e.target.value)} />
           <label>Back</label>
           <input value={c.back} onChange={(e) => setCard(i, "back", e.target.value)} />
+          {[
+            { key: "image", fileKey: "imageFile", label: "Front image" },
+            { key: "backImage", fileKey: "backImageFile", label: "Back image" },
+          ].map(({ key, fileKey, label }) => (
+            <div key={key}>
+              <label htmlFor={`${key}-${i}`}>{label}</label>
+              <input
+                id={`${key}-${i}`}
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                disabled={busy}
+                onChange={(e) => {
+                  const file = e.target.files[0];
+                  e.target.value = "";
+                  if (!file) return;
+                  try {
+                    validateDeckImage(file);
+                    setCard(i, fileKey, file);
+                  } catch (error) {
+                    notify(error.message);
+                  }
+                }}
+              />
+              {(c[fileKey] || c[key]) && (
+                <div className="image-editor">
+                  <DeckImage source={c[fileKey] ?? c[key]} alt={`${label} for card ${i + 1}`} />
+                  <button
+                    className="btn btn-coral btn-small image-remove"
+                    disabled={busy}
+                    aria-label={`Remove ${label.toLowerCase()} from card ${i + 1}`}
+                    onClick={() => setDeck({
+                      ...deck,
+                      cards: deck.cards.map((card, j) => j === i
+                        ? { ...card, [key]: undefined, [fileKey]: undefined }
+                        : card),
+                    })}
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+          <p className="muted image-help">JPEG, PNG, GIF, or WebP · 5 MB max · saved with the deck</p>
         </div>
       ))}
       <button className="btn btn-ghost" onClick={addCard}>+ Add card</button>
