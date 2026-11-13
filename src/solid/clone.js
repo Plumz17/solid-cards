@@ -1,6 +1,6 @@
 import { loadDeck, saveDeck, newDeckUrl } from "./pod.js";
 
-// Copy a deck into my own container as a separate file; original is untouched.
+// Copy a deck into my own container; the original is untouched.
 export async function cloneDeck(sourceUrl, myContainerUrl) {
   const source = await loadDeck(sourceUrl);
   // Same cards, but with a new creation date and a pointer back to the original.

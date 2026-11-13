@@ -18,7 +18,7 @@ function describeSource(url) {
   }
 }
 
-// Edit one deck. deckUrl === null means a brand-new deck (file created on first save).
+// Edit one deck. deckUrl === null means a brand-new deck (folder and file created on first save).
 export default function DeckEditor({ container, deckUrl, onOpen, onStudy, onBack, notify }) {
   const [deck, setDeck] = useState(deckUrl ? null : blankDeck()); // the deck being edited (null while loading)
   const [mode, setMode] = useState("private");                    // "private", "public", or null if it could not be read
@@ -52,7 +52,7 @@ export default function DeckEditor({ container, deckUrl, onOpen, onStudy, onBack
     if (!deck.name.trim()) return notify("Give your deck a name first.");
     setBusy(true);
     try {
-      const url = deckUrl ?? await newDeckUrl(container, deck.name); // new deck -> make a file name from the title
+      const url = deckUrl ?? await newDeckUrl(container, deck.name); // new deck -> make a folder and file name from the title
       await saveDeck(url, { ...deck, cards: deck.cards.filter((c) => c.front.trim() || c.back.trim()) }); // skip fully empty cards
       notify("Deck saved!");
       if (!deckUrl) onOpen(url); // after creating, switch to editing the saved deck

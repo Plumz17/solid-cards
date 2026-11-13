@@ -2,6 +2,7 @@ import {
   buildThing,
   createContainerAt,
   createSolidDataset,
+  deleteContainer,
   deleteFile,
   getContainedResourceUrlAll,
   getDate,
@@ -102,8 +103,14 @@ export async function listDecks(containerUrl) {
   const fetch = getSolidFetch();
   // A folder is a dataset too; it lists the files inside it. Only .ttl files can be decks.
   const container = await getSolidDataset(containerUrl, { fetch });
-  const urls = getContainedResourceUrlAll(container)
-    .filter((url) => url.toLowerCase().endsWith(".ttl"));
+  const resources = getContainedResourceUrlAll(container);
+  const urls = resources.filter((url) => url.toLowerCase().endsWith(".ttl"));
+  const deckFolders = resources.filter((url) => new URL(url).pathname.endsWith("/"));
+  for (const folderUrl of deckFolders) {
+    const folder = await getSolidDataset(folderUrl, { fetch });
+    urls.push(...getContainedResourceUrlAll(folder)
+      .filter((url) => url.toLowerCase().endsWith(".ttl")));
+  }
 
   // Open every file to get its name and card count.
   const results = await Promise.allSettled(urls.map(async (url) => {
@@ -194,7 +201,13 @@ export async function saveDeck(deckUrl, deck) {
 
 // Delete the deck's file from the pod.
 export async function deleteDeck(deckUrl) {
-  await deleteFile(deckUrl, { fetch: getSolidFetch() });
+  const fetch = getSolidFetch();
+  await deleteFile(deckUrl, { fetch });
+
+  const deckPath = new URL(deckUrl).pathname;
+  if (/\/solidcard\/decks\/[^/]+\/[^/]+$/.test(deckPath)) {
+    await deleteContainer(new URL(".", deckUrl).href, { fetch });
+  }
 }
 
 // Pick a file URL for a new deck: the name as a readable file name, with _2, _3... if it is taken.
@@ -202,9 +215,15 @@ export async function newDeckUrl(containerUrl, name) {
   // "Platform Basics!" -> "platform_basics"
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "deck";
   const fetch = getSolidFetch();
+  const baseUrl = containerUrl.endsWith("/") ? containerUrl : `${containerUrl}/`;
   for (let suffix = 1; ; suffix++) {
-    const filename = suffix === 1 ? `${slug}.ttl` : `${slug}_${suffix}.ttl`;
-    const url = new URL(filename, containerUrl).href;
-    if (!(await resourceExists(url, fetch))) return url;
+    const folderName = suffix === 1 ? slug : `${slug}_${suffix}`;
+    const folderUrl = new URL(`${folderName}/`, baseUrl).href;
+    const legacyFileUrl = new URL(`${folderName}.ttl`, baseUrl).href;
+    if (await resourceExists(folderUrl, fetch)) continue;
+    if (await resourceExists(legacyFileUrl, fetch)) continue;
+
+    await createContainerAt(folderUrl, { fetch });
+    return new URL(`${folderName}.ttl`, folderUrl).href;
   }
 }
