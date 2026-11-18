@@ -284,7 +284,8 @@ function makeDeckThings(deckUrl, deck) {
     .addUrl("http://www.w3.org/1999/02/22-rdf-syntax-ns#type", `${SCHEMA}CreativeWork`)
     .setStringNoLocale(`${SCHEMA}name`, deck.name)
     .setStringNoLocale(`${SCHEMA}description`, deck.description ?? "")
-    .setDate(`${SCHEMA}dateCreated`, new Date(`${deck.dateCreated}T00:00:00.000Z`));
+    // A deck file written by something else may have no readable date: use today instead of crashing.
+    .setDate(`${SCHEMA}dateCreated`, deck.dateCreated ? new Date(`${deck.dateCreated}T00:00:00.000Z`) : new Date());
   if (deck.isBasedOn) deckThing.setUrl(`${SCHEMA}isBasedOn`, deck.isBasedOn);
 
   const cardThings = [];
