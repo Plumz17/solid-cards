@@ -24,16 +24,21 @@ export default function Study({ deckUrl, onBack }) {
   const [phase, setPhase] = useState("setup"); // "setup" = choose options, "playing" = studying
   const [inOrder, setInOrder] = useState(false); // setup option: true = deck's own order instead of shuffled
   const [timerOn, setTimerOn] = useState(true);  // setup option: show a count-up stopwatch
+  const [limit, setLimit] = useState("");       // setup option: max cards this round ("" = all)
+  const [roundSize, setRoundSize] = useState(0); // how many cards this round has (the limit can make it less than the deck)
   const [seconds, setSeconds] = useState(0);     // time spent in this round
   const [queue, setQueue] = useState([]);   // card indexes still to learn
   const [flipped, setFlipped] = useState(false); // is the current card showing its back?
   const [misses, setMisses] = useState(0);  // how many times "Again" was pressed
   const [step, setStep] = useState(0);      // changes per card so each one is a fresh element (deals in unflipped)
 
-  // "Start" button: put all cards into the queue (shuffled unless in order) and reset the counters.
+  // "Start" button: put the cards into the queue (shuffled unless in order), keep only the first
+  // "limit" of them (so shuffled = a random few, in order = the first few), and reset the counters.
   const start = () => {
     const indexes = deck.cards.map((_, i) => i);
-    setQueue(inOrder ? indexes : shuffle(indexes));
+    const picked = (inOrder ? indexes : shuffle(indexes)).slice(0, Number(limit) || indexes.length);
+    setQueue(picked);
+    setRoundSize(picked.length);
     setFlipped(false);
     setMisses(0);
     setSeconds(0);
@@ -78,12 +83,19 @@ export default function Study({ deckUrl, onBack }) {
         <p className="muted">{deck.cards.length} card{deck.cards.length === 1 ? "" : "s"}</p>
 
         <div className="tile">
+          {/* Order: the selected button is the filled one */}
           <label>Card order</label>
           <div className="segmented">
             <button className={inOrder ? "btn btn-ghost" : "btn"} onClick={() => setInOrder(false)}>Shuffle</button>
             <button className={inOrder ? "btn" : "btn btn-ghost"} onClick={() => setInOrder(true)}>Deck order</button>
           </div>
 
+          {/* Limit: leave empty to study every card */}
+          <label htmlFor="limit">Number of cards</label>
+          <input id="limit" type="number" min="1" max={deck.cards.length} placeholder={`All (${deck.cards.length})`} value={limit}
+            onChange={(e) => setLimit(e.target.value)} />
+
+          {/* Timer: on = show the stopwatch during the round and the final time at the end */}
           <label>Timer</label>
           <div className="segmented">
             <button className={timerOn ? "btn" : "btn btn-ghost"} onClick={() => setTimerOn(true)}>On</button>
@@ -96,7 +108,8 @@ export default function Study({ deckUrl, onBack }) {
     );
   }
 
-  const total = deck.cards.length;
+  // Round screen: progress, timer, then either the current card or the "Round complete" message.
+  const total = roundSize;              // cards in this round (may be fewer than the deck)
   const learned = total - queue.length;  // cards already answered "Got it"
   const card = deck.cards[queue[0]];     // the card to show now
 
