@@ -12,6 +12,10 @@ const shuffle = (list) => {
   return a;
 };
 
+// Background music for the round (the browser only downloads it when it first plays).
+const music = new Audio(import.meta.env.BASE_URL + "music.mp3");
+music.loop = true;
+
 // 95 seconds -> "1:35"
 const formatTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
@@ -24,6 +28,7 @@ export default function Study({ deckUrl, onBack }) {
   const [phase, setPhase] = useState("setup"); // "setup" = choose options, "playing" = studying
   const [inOrder, setInOrder] = useState(false); // setup option: true = deck's own order instead of shuffled
   const [timerOn, setTimerOn] = useState(true);  // setup option: show a count-up stopwatch
+  const [musicOn, setMusicOn] = useState(true);  // setup option: play background music during the round
   const [limit, setLimit] = useState("");       // setup option: max cards this round ("" = all)
   const [roundSize, setRoundSize] = useState(0); // how many cards this round has (the limit can make it less than the deck)
   const [seconds, setSeconds] = useState(0);     // time spent in this round
@@ -45,6 +50,17 @@ export default function Study({ deckUrl, onBack }) {
     setStep(step + 1);
     setPhase("playing");
   };
+
+  // Play the music only while cards are being studied and the Music setting is On. Pressing Start is a
+  // click, so the browser allows the sound. The cleanup stops it when the round ends or the screen closes.
+  const studying = phase === "playing" && queue.length > 0 && musicOn;
+  useEffect(() => {
+    if (studying) {
+      music.currentTime = 0; // every round starts the track from the beginning
+      music.play().catch(() => {});
+    }
+    return () => music.pause();
+  }, [studying]);
 
   // Load the deck; the round starts when the user presses Start.
   useEffect(() => {
@@ -100,6 +116,13 @@ export default function Study({ deckUrl, onBack }) {
           <div className="segmented">
             <button className={timerOn ? "btn" : "btn btn-ghost"} onClick={() => setTimerOn(true)}>On</button>
             <button className={timerOn ? "btn btn-ghost" : "btn"} onClick={() => setTimerOn(false)}>Off</button>
+          </div>
+
+          {/* Music: on = background music plays during the round */}
+          <label>Music</label>
+          <div className="segmented">
+            <button className={musicOn ? "btn" : "btn btn-ghost"} onClick={() => setMusicOn(true)}>On</button>
+            <button className={musicOn ? "btn btn-ghost" : "btn"} onClick={() => setMusicOn(false)}>Off</button>
           </div>
         </div>
 
