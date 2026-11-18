@@ -4,7 +4,7 @@ import { parseLink } from "../solid/sharing.js";
 import { Loading, Empty, ErrorBox } from "../components.jsx";
 
 // Deck list + "Paste a deck link" field.
-export default function MyDecks({ container, onOpen, onNew, onPreview, onStudy }) {
+export default function MyDecks({ container, onOpen, onNew, onPreview, onStudy, onFriends }) {
   const [decks, setDecks] = useState(null);   // null while loading, then the list of decks
   const [error, setError] = useState("");     // message if loading failed
   const [link, setLink] = useState("");       // text typed in the "paste a link" field
@@ -31,7 +31,10 @@ export default function MyDecks({ container, onOpen, onNew, onPreview, onStudy }
       {/* Title and "new deck" button */}
       <div className="spread">
         <h1>My decks</h1>
-        <button className="btn btn-amber" onClick={onNew}>+ New deck</button>
+        <div className="row">
+          <button className="btn btn-ghost" onClick={onFriends}>Friends</button>
+          <button className="btn btn-amber" onClick={onNew}>+ New deck</button>
+        </div>
       </div>
 
       {/* Paste a deck link (app link or raw deck URL) */}
