@@ -1,8 +1,7 @@
 // Small shared pieces: icons, loading / empty / error messages and the visibility badge.
 import { useEffect, useState } from "react";
-import { getFile } from "@inrupt/solid-client";
 import { FaLock, FaEarthAmericas, FaLayerGroup, FaTriangleExclamation, FaStar } from "react-icons/fa6";
-import { getSolidFetch } from "./solid/auth.js";
+import { loadDeckImage } from "./solid/pod.js";
 
 // Short name -> icon, so screens write <Icon name="lock" /> instead of importing icons themselves.
 const ICONS = { lock: FaLock, globe: FaEarthAmericas, card: FaLayerGroup, warning: FaTriangleExclamation, star: FaStar };
@@ -63,7 +62,7 @@ export function DeckImage({ source, alt = "Card image" }) {
 
     const filePromise = source instanceof Blob
       ? Promise.resolve(source)
-      : getFile(source, { fetch: getSolidFetch() });
+      : loadDeckImage(source);
     filePromise
       .then((file) => {
         objectUrl = URL.createObjectURL(file);

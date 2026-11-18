@@ -3,22 +3,22 @@ import { copyDeckImage, loadDeck, saveDeck, newDeckUrl } from "./pod.js";
 // Copy a deck into my own container; the original is untouched.
 export async function cloneDeck(sourceUrl, myContainerUrl) {
   const source = await loadDeck(sourceUrl);
-  // Same cards, but with a new creation date and a pointer back to the original.
-  const copy = {
-    ...source,
-    dateCreated: new Date().toISOString().slice(0, 10),
-    isBasedOn: sourceUrl + "#deck",
-  };
-  // Write the copy as a new file in my own pod.
+  // The copy goes into a new folder in my own pod; its images are copied there one by one.
   const url = await newDeckUrl(myContainerUrl, source.name);
-  copy.cards = [];
+  const cards = [];
   for (const card of source.cards) {
-    copy.cards.push({
+    cards.push({
       ...card,
       image: card.image ? await copyDeckImage(card.image, url) : undefined,
       backImage: card.backImage ? await copyDeckImage(card.backImage, url) : undefined,
     });
   }
-  await saveDeck(url, copy);
+  // Same deck, but with the copied cards, a new creation date and a pointer back to the original.
+  await saveDeck(url, {
+    ...source,
+    cards,
+    dateCreated: new Date().toISOString().slice(0, 10),
+    isBasedOn: sourceUrl + "#deck",
+  });
   return url;
 }

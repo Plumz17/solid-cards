@@ -18,6 +18,39 @@ function describeSource(url) {
   }
 }
 
+// Image URLs used by a list of cards.
+const imagesOf = (cards) => cards.flatMap((card) => [card.image, card.backImage]).filter(Boolean);
+
+// A card with no text and no image is not saved.
+const isEmptyCard = (card) => !(card.front.trim() || card.back.trim() || card.image || card.backImage);
+
+// Upload the image files the user picked (card.imageFile / card.backImageFile) into the deck's folder.
+// Returns the cards with the new image URLs instead of the files. Every uploaded URL is added to `uploaded`.
+async function uploadCardImages(deckUrl, cards, uploaded) {
+  const result = [];
+  for (const card of cards) {
+    const withUrls = { ...card };
+    for (const [imageKey, fileKey] of [["image", "imageFile"], ["backImage", "backImageFile"]]) {
+      if (!withUrls[fileKey]) continue;
+      withUrls[imageKey] = await uploadDeckImage(deckUrl, withUrls[fileKey]);
+      uploaded.push(withUrls[imageKey]);
+      delete withUrls[fileKey];
+    }
+    result.push(withUrls);
+  }
+  return result;
+}
+
+// Delete images from the deck's folder. Never throws: returns the error messages of the ones that failed.
+async function deleteImages(deckUrl, imageUrls) {
+  const errors = [];
+  for (const imageUrl of imageUrls) {
+    try { await deleteDeckImage(deckUrl, imageUrl); }
+    catch (e) { errors.push(e.message); }
+  }
+  return errors;
+}
+
 // Edit one deck. deckUrl === null means a brand-new deck (folder and file created on first save).
 export default function DeckEditor({ container, deckUrl, onOpen, onStudy, onBack, notify }) {
   const [deck, setDeck] = useState(deckUrl ? null : blankDeck()); // the deck being edited (null while loading)
@@ -51,55 +84,26 @@ export default function DeckEditor({ container, deckUrl, onOpen, onStudy, onBack
   async function save() {
     if (!deck.name.trim()) return notify("Give your deck a name first.");
     setBusy(true);
-    let saved = false;
-    let imageDeckUrl = deckUrl;
-    const uploadedImages = [];
+    const uploaded = []; // images uploaded during this save, so a failed save can delete them again
+    let url = deckUrl;
+    let cards;           // every card, with its new image files replaced by pod URLs
     try {
-      const url = deckUrl ?? await newDeckUrl(container, deck.name); // new deck -> make a folder and file name from the title
-      imageDeckUrl = url;
-      const cards = [];
-      const savedCardsByIndex = new Map();
-      for (const [index, card] of deck.cards.entries()) {
-        const savedCard = { ...card };
-        for (const [imageKey, fileKey] of [["image", "imageFile"], ["backImage", "backImageFile"]]) {
-          if (!savedCard[fileKey]) continue;
-          savedCard[imageKey] = await uploadDeckImage(url, savedCard[fileKey]);
-          uploadedImages.push(savedCard[imageKey]);
-          delete savedCard[fileKey];
-        }
-        if (!(savedCard.front.trim() || savedCard.back.trim() || savedCard.image || savedCard.backImage)) continue;
-        cards.push(savedCard);
-        savedCardsByIndex.set(index, savedCard);
-      }
-      await saveDeck(url, { ...deck, cards });
-      saved = true;
-      setDeck({
-        ...deck,
-        cards: deck.cards.map((card, index) => savedCardsByIndex.get(index) ?? card),
-      });
-
-      const retainedImages = new Set(cards.flatMap((card) => [card.image, card.backImage]).filter(Boolean));
-      const oldImages = deck.cards.flatMap((card) => [card.image, card.backImage]).filter(Boolean);
-      for (const oldImage of new Set(oldImages)) {
-        if (!retainedImages.has(oldImage)) await deleteDeckImage(url, oldImage);
-      }
-      notify("Deck saved!");
-      if (!deckUrl) onOpen(url); // after creating, switch to editing the saved deck
+      url = deckUrl ?? await newDeckUrl(container, deck.name); // new deck -> make a folder and file name from the title
+      cards = await uploadCardImages(url, deck.cards, uploaded);
+      await saveDeck(url, { ...deck, cards: cards.filter((card) => !isEmptyCard(card)) });
     } catch (e) {
-      if (saved) {
-        notify("Deck saved, but an old image couldn't be removed: " + e.message);
-      } else {
-        const cleanupErrors = [];
-        if (imageDeckUrl) {
-          for (const image of uploadedImages) {
-            try { await deleteDeckImage(imageDeckUrl, image); }
-            catch (cleanupError) { cleanupErrors.push(cleanupError.message); }
-          }
-        }
-        const cleanupMessage = cleanupErrors.length ? ` Image cleanup failed: ${cleanupErrors.join("; ")}` : "";
-        notify("Couldn't save: " + e.message + cleanupMessage);
-      }
+      const cleanupErrors = await deleteImages(url, uploaded);
+      const cleanupMessage = cleanupErrors.length ? ` Image cleanup failed: ${cleanupErrors.join("; ")}` : "";
+      notify("Couldn't save: " + e.message + cleanupMessage);
+      return setBusy(false);
     }
+
+    // Saved. Show the uploaded images as normal pod images, and delete the ones no card uses any more.
+    setDeck({ ...deck, cards });
+    const stillUsed = new Set(imagesOf(cards));
+    const removeErrors = await deleteImages(url, imagesOf(deck.cards).filter((image) => !stillUsed.has(image)));
+    notify(removeErrors.length ? "Deck saved, but an old image couldn't be removed: " + removeErrors.join("; ") : "Deck saved!");
+    if (!deckUrl) onOpen(url); // after creating, switch to editing the saved deck
     setBusy(false);
   }
 

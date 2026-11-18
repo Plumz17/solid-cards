@@ -139,6 +139,12 @@ export async function syncDeckImagesAccess(deckUrl, readable) {
   if (imageUrls.length) await setDeckImagesDefaultAccess(deckUrl, readable);
 }
 
+// Download an image (logged in, so private decks work) as a Blob the browser can show.
+// components.jsx calls this instead of importing the Solid library itself.
+export function loadDeckImage(imageUrl) {
+  return getFile(imageUrl, { fetch: getSolidFetch() });
+}
+
 export async function copyDeckImage(imageUrl, targetDeckUrl) {
   const file = await getFile(imageUrl, { fetch: getSolidFetch() });
   const copy = new File([file], "image", { type: file.type });
@@ -281,7 +287,7 @@ function makeDeckThings(deckUrl, deck) {
     .setDate(`${SCHEMA}dateCreated`, new Date(`${deck.dateCreated}T00:00:00.000Z`));
   if (deck.isBasedOn) deckThing.setUrl(`${SCHEMA}isBasedOn`, deck.isBasedOn);
 
-  const things = [deckThing.build()];
+  const cardThings = [];
   // One question entry and one answer entry per card, numbered by position; the deck links to each card.
   deck.cards.forEach((card, index) => {
     const cardUrl = `${deckUrl}#card-${index + 1}`;
@@ -297,10 +303,10 @@ function makeDeckThings(deckUrl, deck) {
       .addUrl("http://www.w3.org/1999/02/22-rdf-syntax-ns#type", `${SCHEMA}Answer`)
       .setStringNoLocale(`${SCHEMA}text`, card.back);
     if (card.backImage) answerThing.setUrl(`${SCHEMA}image`, card.backImage);
-    things.push(cardThing.build(), answerThing.build());
+    cardThings.push(cardThing.build(), answerThing.build());
   });
-  things[0] = deckThing.build(); // rebuild the deck entry, now that it links to all its cards
-  return things;
+  // Build the deck entry last, once it links to all its cards.
+  return [deckThing.build(), ...cardThings];
 }
 
 // Save a deck to its file. Creates the file the first time, replaces the content afterwards.
