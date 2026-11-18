@@ -12,37 +12,48 @@ const shuffle = (list) => {
   return a;
 };
 
+// 95 seconds -> "1:35"
+const formatTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
 // Study one deck, one card at a time. Progress lives in memory only; nothing is written to the pod.
-// "Again" sends the card to the back of the queue; the round ends when the queue is empty.
+// First a setup screen (order + timer), then the round. "Again" sends the card to the back of the queue;
+// the round ends when the queue is empty.
 export default function Study({ deckUrl, onBack }) {
   const [deck, setDeck] = useState(null);   // the loaded deck (null while loading)
   const [error, setError] = useState("");
+  const [phase, setPhase] = useState("setup"); // "setup" = choose options, "playing" = studying
+  const [inOrder, setInOrder] = useState(false); // setup option: true = deck's own order instead of shuffled
+  const [timerOn, setTimerOn] = useState(true);  // setup option: show a count-up stopwatch
+  const [seconds, setSeconds] = useState(0);     // time spent in this round
   const [queue, setQueue] = useState([]);   // card indexes still to learn
   const [flipped, setFlipped] = useState(false); // is the current card showing its back?
   const [misses, setMisses] = useState(0);  // how many times "Again" was pressed
   const [step, setStep] = useState(0);      // changes per card so each one is a fresh element (deals in unflipped)
 
-  const [inOrder, setInOrder] = useState(false); // true = study in the deck's own order instead of shuffled
-
-  // Begin a round: put all cards into the queue (shuffled unless in order) and reset the counters.
-  const start = (d, ordered = inOrder) => {
-    const indexes = d.cards.map((_, i) => i);
-    setQueue(ordered ? indexes : shuffle(indexes));
+  // "Start" button: put all cards into the queue (shuffled unless in order) and reset the counters.
+  const start = () => {
+    const indexes = deck.cards.map((_, i) => i);
+    setQueue(inOrder ? indexes : shuffle(indexes));
     setFlipped(false);
     setMisses(0);
+    setSeconds(0);
+    setStep(step + 1);
+    setPhase("playing");
   };
 
-  // Switching the option restarts the round so it takes effect right away.
-  function changeOrder(ordered) {
-    setInOrder(ordered);
-    start(deck, ordered);
-    setStep(step + 1);
-  }
-
-  // Load the deck, then start the first round.
+  // Load the deck; the round starts when the user presses Start.
   useEffect(() => {
-    loadDeck(deckUrl).then((d) => { setDeck(d); start(d); }).catch((e) => setError(e.message));
+    loadDeck(deckUrl).then(setDeck).catch((e) => setError(e.message));
   }, [deckUrl]);
+
+  // Stopwatch: tick once a second while a round is running. It stops when the queue is empty,
+  // so the final time stays on screen.
+  const running = phase === "playing" && timerOn && queue.length > 0;
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => setSeconds((s) => s + 1), 1000);
+    return () => clearInterval(id); // stop the old timer when the round ends or the screen closes
+  }, [running]);
 
   // "Got it" removes the card from the queue; "Again" moves it to the back.
   function answer(gotIt) {
@@ -57,6 +68,33 @@ export default function Study({ deckUrl, onBack }) {
   if (error) return <ErrorBox onRetry={onBack}>{error}</ErrorBox>;
   if (!deck) return <Loading text="Getting your cards…" />;
   if (deck.cards.length === 0) return <Empty title="No cards to study">Add some cards to this deck first.</Empty>;
+
+  // Setup screen: choose the order and the timer, then start.
+  if (phase === "setup") {
+    return (
+      <>
+        <button className="btn btn-ghost btn-small" onClick={onBack}>← Exit</button>
+        <h1 style={{ marginTop: 16 }}>{deck.name}</h1>
+        <p className="muted">{deck.cards.length} card{deck.cards.length === 1 ? "" : "s"}</p>
+
+        <div className="tile">
+          <label>Card order</label>
+          <div className="segmented">
+            <button className={inOrder ? "btn btn-ghost" : "btn"} onClick={() => setInOrder(false)}>Shuffle</button>
+            <button className={inOrder ? "btn" : "btn btn-ghost"} onClick={() => setInOrder(true)}>Deck order</button>
+          </div>
+
+          <label>Timer</label>
+          <div className="segmented">
+            <button className={timerOn ? "btn" : "btn btn-ghost"} onClick={() => setTimerOn(true)}>On</button>
+            <button className={timerOn ? "btn btn-ghost" : "btn"} onClick={() => setTimerOn(false)}>Off</button>
+          </div>
+        </div>
+
+        <button className="btn btn-amber" style={{ width: "100%" }} onClick={start}>▶ Start</button>
+      </>
+    );
+  }
 
   const total = deck.cards.length;
   const learned = total - queue.length;  // cards already answered "Got it"
@@ -73,10 +111,7 @@ export default function Study({ deckUrl, onBack }) {
       </div>
       <div className="spread" style={{ alignItems: "center" }}>
         <p className="muted">{learned} / {total} learned</p>
-        <label className="row muted" style={{ gap: 6, flexWrap: "nowrap", margin: 0 }}>
-          <input type="checkbox" style={{ width: "auto", margin: 0 }} checked={inOrder} onChange={(e) => changeOrder(e.target.checked)} />
-          Keep deck order
-        </label>
+        {timerOn && <p className="muted">⏱ {formatTime(seconds)}</p>}
       </div>
 
       {queue.length === 0 ? (
@@ -84,10 +119,13 @@ export default function Study({ deckUrl, onBack }) {
         <div className="tile message">
           <span className="message-icon"><Icon name="star" /></span>
           <h2>Round complete!</h2>
-          <p className="muted">{misses === 0 ? "You got every card first try." : `You needed ${misses} extra ${misses === 1 ? "try" : "tries"}.`}</p>
+          <p className="muted">
+            {misses === 0 ? "You got every card first try." : `You needed ${misses} extra ${misses === 1 ? "try" : "tries"}.`}
+            {timerOn && ` Time: ${formatTime(seconds)}.`}
+          </p>
           <div className="row" style={{ justifyContent: "center", marginTop: 12 }}>
             <button className="btn btn-ghost" onClick={onBack}>Done</button>
-            <button className="btn btn-amber" onClick={() => start(deck)}>Study again</button>
+            <button className="btn btn-amber" onClick={() => setPhase("setup")}>Study again</button>
           </div>
         </div>
       ) : (
