@@ -12,9 +12,12 @@ const shuffle = (list) => {
   return a;
 };
 
-// Background music for the round (the browser only downloads it when it first plays).
-const music = new Audio(import.meta.env.BASE_URL + "music.mp3");
-music.loop = true;
+// Background music. We use Web Audio instead of an <audio> tag because it repeats with no gap.
+// The file is downloaded once and decoded into a "buffer" (the sound, ready to play).
+const audioContext = new AudioContext();
+const musicBuffer = fetch(import.meta.env.BASE_URL + "music.ogg")
+  .then((response) => response.arrayBuffer())
+  .then((data) => audioContext.decodeAudioData(data));
 
 // 95 seconds -> "1:35"
 const formatTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
@@ -55,11 +58,22 @@ export default function Study({ deckUrl, onBack }) {
   // click, so the browser allows the sound. The cleanup stops it when the round ends or the screen closes.
   const studying = phase === "playing" && queue.length > 0 && musicOn;
   useEffect(() => {
-    if (studying) {
-      music.currentTime = 0; // every round starts the track from the beginning
-      music.play().catch(() => {});
-    }
-    return () => music.pause();
+    if (!studying) return;
+    let source;
+    let cancelled = false; // true if the round ended before the music finished loading
+    musicBuffer.then((buffer) => {
+      if (cancelled) return;
+      audioContext.resume();                       // browsers keep sound off until the user has clicked
+      source = audioContext.createBufferSource();  // a "player" for the buffer; a new one per round = starts at 0:00
+      source.buffer = buffer;
+      source.loop = true;
+      source.connect(audioContext.destination);    // destination = the speakers
+      source.start();
+    }).catch(() => {});
+    return () => {
+      cancelled = true;
+      source?.stop();
+    };
   }, [studying]);
 
   // Load the deck; the round starts when the user presses Start.
