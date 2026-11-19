@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { loadDeck, saveDeck, deleteDeck, deleteDeckImage, newDeckUrl, uploadDeckImage, validateDeckImage } from "../solid/pod.js";
+import { loadDeck, saveDeck, deleteDeck, deleteDeckImage, newDeckUrl, uploadDeckImages, validateDeckImage } from "../solid/pod.js";
 import { getVisibility, setVisibility, buildLink } from "../solid/sharing.js";
 import { DeckImage, Loading, ErrorBox, VisibilityBadge, Icon } from "../components.jsx";
 
@@ -27,17 +27,20 @@ const isEmptyCard = (card) => !(card.front.trim() || card.back.trim() || card.im
 // Upload the image files the user picked (card.imageFile / card.backImageFile) into the deck's folder.
 // Returns the cards with the new image URLs instead of the files. Every uploaded URL is added to `uploaded`.
 async function uploadCardImages(deckUrl, cards, uploaded) {
-  const result = [];
-  for (const card of cards) {
-    const withUrls = { ...card };
+  const result = cards.map((card) => ({ ...card }));
+  const uploads = [];
+  for (const [cardIndex, card] of cards.entries()) {
     for (const [imageKey, fileKey] of [["image", "imageFile"], ["backImage", "backImageFile"]]) {
-      if (!withUrls[fileKey]) continue;
-      withUrls[imageKey] = await uploadDeckImage(deckUrl, withUrls[fileKey]);
-      uploaded.push(withUrls[imageKey]);
-      delete withUrls[fileKey];
+      if (!card[fileKey]) continue;
+      uploads.push({ cardIndex, imageKey, file: card[fileKey] });
+      delete result[cardIndex][fileKey];
     }
-    result.push(withUrls);
   }
+  const imageUrls = await uploadDeckImages(deckUrl, uploads.map(({ file }) => file));
+  uploaded.push(...imageUrls);
+  uploads.forEach(({ cardIndex, imageKey }, index) => {
+    result[cardIndex][imageKey] = imageUrls[index];
+  });
   return result;
 }
 
@@ -52,7 +55,7 @@ async function deleteImages(deckUrl, imageUrls) {
 }
 
 // Edit one deck. deckUrl === null means a brand-new deck (folder and file created on first save).
-export default function DeckEditor({ container, deckUrl, onOpen, onStudy, onBack, notify }) {
+export default function DeckEditor({ container, deckUrl, onOpen, onStudy, onBack, onDecksChanged, notify }) {
   const [deck, setDeck] = useState(deckUrl ? null : blankDeck()); // the deck being edited (null while loading)
   const [mode, setMode] = useState("private");                    // "private", "public", or null if it could not be read
   const [error, setError] = useState("");                         // message if loading failed
@@ -90,7 +93,9 @@ export default function DeckEditor({ container, deckUrl, onOpen, onStudy, onBack
     try {
       url = deckUrl ?? await newDeckUrl(container, deck.name); // new deck -> make a folder and file name from the title
       cards = await uploadCardImages(url, deck.cards, uploaded);
-      await saveDeck(url, { ...deck, cards: cards.filter((card) => !isEmptyCard(card)) });
+      const imagesAccessPrepared = deck.cards.some((card) => card.imageFile || card.backImageFile);
+      await saveDeck(url, { ...deck, cards: cards.filter((card) => !isEmptyCard(card)) }, { imagesAccessPrepared });
+      onDecksChanged();
     } catch (e) {
       const cleanupErrors = await deleteImages(url, uploaded);
       const cleanupMessage = cleanupErrors.length ? ` Image cleanup failed: ${cleanupErrors.join("; ")}` : "";
@@ -130,6 +135,7 @@ export default function DeckEditor({ container, deckUrl, onOpen, onStudy, onBack
     setBusy(true);
     try {
       await deleteDeck(deckUrl);
+      onDecksChanged();
       onBack();
     } catch (e) {
       notify("Couldn't delete: " + e.message);

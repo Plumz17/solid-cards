@@ -1,19 +1,18 @@
-import { copyDeckImage, loadDeck, saveDeck, newDeckUrl } from "./pod.js";
+import { copyDeckImages, loadDeck, saveDeck, newDeckUrl } from "./pod.js";
 
 // Copy a deck into my own container; the original is untouched.
 export async function cloneDeck(sourceUrl, myContainerUrl) {
   const source = await loadDeck(sourceUrl);
-  // The copy goes into a new folder in my own pod; its images are copied there one by one.
+  // The copy goes into a new folder in my own pod.
   const url = await newDeckUrl(myContainerUrl, source.name);
-  // Copy every card; the text stays the same, the images are replaced by their new copies in my pod.
-  const cards = [];
-  for (const card of source.cards) {
-    cards.push({
-      ...card,
-      image: card.image ? await copyDeckImage(card.image, url) : undefined,
-      backImage: card.backImage ? await copyDeckImage(card.backImage, url) : undefined,
-    });
-  }
+  const imageUrls = source.cards.flatMap((card) => [card.image, card.backImage].filter(Boolean));
+  const copiedImageUrls = await copyDeckImages(imageUrls, url);
+  let copiedImageIndex = 0;
+  const cards = source.cards.map((card) => ({
+    ...card,
+    image: card.image ? copiedImageUrls[copiedImageIndex++] : undefined,
+    backImage: card.backImage ? copiedImageUrls[copiedImageIndex++] : undefined,
+  }));
   // Same deck, but with the copied cards, a new creation date and a pointer back to the original.
   await saveDeck(url, {
     ...source,

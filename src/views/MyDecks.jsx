@@ -4,19 +4,28 @@ import { parseLink } from "../solid/sharing.js";
 import { Loading, Empty, ErrorBox } from "../components.jsx";
 
 // Deck list + "Paste a deck link" field.
-export default function MyDecks({ container, onOpen, onNew, onPreview, onStudy }) {
-  const [decks, setDecks] = useState(null);   // null while loading, then the list of decks
+export default function MyDecks({ container, decks, setDecks, onOpen, onNew, onPreview, onStudy }) {
   const [error, setError] = useState("");     // message if loading failed
+  const [attempt, setAttempt] = useState(0);
   const [link, setLink] = useState("");       // text typed in the "paste a link" field
   const [linkError, setLinkError] = useState("");
 
   // Load deck content only; permission checks are handled from the editor on demand.
-  const load = () => {
-    setDecks(null);
+  useEffect(() => {
+    if (decks !== null) return undefined;
+    let active = true;
     setError("");
-    listDecks(container).then(setDecks).catch((e) => setError(e.message));
+    listDecks(container)
+      .then((result) => { if (active) setDecks(result); })
+      .catch((e) => { if (active) setError(e.message); });
+    return () => { active = false; };
+  }, [container, decks, setDecks, attempt]);
+
+  const load = () => {
+    setError("");
+    setDecks(null);
+    setAttempt((current) => current + 1);
   };
-  useEffect(load, [container]); // load once when the screen opens
 
   // "Open" button: turn the pasted text into a deck URL and show its preview.
   function openLink(e) {

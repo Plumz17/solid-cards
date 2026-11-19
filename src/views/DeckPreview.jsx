@@ -5,7 +5,7 @@ import { Loading, Empty, ErrorBox, FlipCard } from "../components.jsx";
 
 // Read-only view of any deck URL, with a Clone button. Tap a card to flip it.
 // `container` is the viewer's own decks folder (null when logged out or not loaded yet): clones are saved there.
-export default function DeckPreview({ deckUrl, container, loggedIn, onBack, onOpen, onStudy, notify }) {
+export default function DeckPreview({ deckUrl, container, loggedIn, onBack, onOpen, onStudy, onDecksChanged, notify }) {
   const [deck, setDeck] = useState(null);     // the loaded deck (null while loading)
   const [error, setError] = useState("");     // e.g. "private or not found"
   const [flipped, setFlipped] = useState({}); // which cards are flipped, e.g. { 0: true }
@@ -23,6 +23,7 @@ export default function DeckPreview({ deckUrl, container, loggedIn, onBack, onOp
     setBusy(true);
     try {
       const url = await cloneDeck(deckUrl, container);
+      onDecksChanged();
       notify("Cloned into your pod!");
       onOpen(url);
     } catch (e) { notify("Couldn't clone: " + e.message); }

@@ -47,6 +47,7 @@ const IMAGE_TYPES = new Map([
 ]);
 // Largest image allowed (5 MB), so the pod doesn't fill up with huge files.
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+const deckImageCache = new Map();
 
 // Does something exist at this URL? true = yes, false = 404, anything else (e.g. 403) is an error.
 async function resourceExists(url, fetch) {
@@ -97,40 +98,12 @@ export function validateDeckImage(file) {
 
 // Upload an image into the deck's folder. -> URL of the saved image
 // The folder's access is set first, so a public deck's new image is public too.
-export async function uploadDeckImage(deckUrl, file) {
-  validateDeckImage(file);
-  const fetch = getSolidFetch();
-  const { folderUrl } = getDeckFolderInfo(deckUrl);
-  await ensureContainer(folderUrl, fetch);
-
-  // Existing deck: the folder follows the deck's current visibility. New deck: start private.
-  const deckExists = await resourceExists(deckUrl, fetch);
-  if (deckExists) {
-    const deckAccess = await getPublicAccess(deckUrl, { fetch });
-    if (deckAccess) await setDeckImagesDefaultAccess(deckUrl, deckAccess.read);
-  } else {
-    await setDeckImagesDefaultAccess(deckUrl, false);
-  }
-
-  // A random file name, so two images never overwrite each other (and the original name isn't leaked).
-  const filename = `image-${crypto.randomUUID()}.${IMAGE_TYPES.get(file.type)}`;
-  const upload = new File([file], filename, { type: file.type });
-  const savedFile = await saveFileInContainer(folderUrl, upload, { fetch });
-  return getSourceUrl(savedFile);
-}
-
-// Make every file in the deck's folder readable by everyone (readable = true) or only by the owner.
-// The folder's permission file (ACL) is edited, so new images inherit the setting automatically.
-export async function setDeckImagesDefaultAccess(deckUrl, readable) {
-  const fetch = getSolidFetch();
-  const { folderUrl } = getDeckFolderInfo(deckUrl);
-  await ensureContainer(folderUrl, fetch);
+async function setDeckImagesDefaultAccessInFolder(folderUrl, readable, fetch) {
   const folder = await getSolidDatasetWithAcl(folderUrl, { fetch });
   if (!hasAccessibleAcl(folder)) {
     throw new Error(`Couldn't access the permissions for deck folder ${folderUrl}.`);
   }
 
-  // Use the folder's own ACL, or start one from the inherited (fallback) ACL if it has none yet.
   let acl = getResourceAcl(folder);
   if (!acl) {
     if (!hasFallbackAcl(folder) || !getFallbackAcl(folder)) {
@@ -148,6 +121,60 @@ export async function setDeckImagesDefaultAccess(deckUrl, readable) {
   await saveAclFor(folder, updatedAcl, { fetch });
 }
 
+export async function uploadDeckImages(deckUrl, files) {
+  files.forEach(validateDeckImage);
+  if (files.length === 0) return [];
+
+  const fetch = getSolidFetch();
+  const { folderUrl } = getDeckFolderInfo(deckUrl);
+  await ensureContainer(folderUrl, fetch);
+
+  const deckExists = await resourceExists(deckUrl, fetch);
+  if (deckExists) {
+    const deckAccess = await getPublicAccess(deckUrl, { fetch });
+    if (deckAccess) await setDeckImagesDefaultAccessInFolder(folderUrl, deckAccess.read, fetch);
+  } else {
+    await setDeckImagesDefaultAccessInFolder(folderUrl, false, fetch);
+  }
+
+  const results = await Promise.allSettled(files.map(async (file) => {
+    const filename = `image-${crypto.randomUUID()}.${IMAGE_TYPES.get(file.type)}`;
+    const upload = new File([file], filename, { type: file.type });
+    const savedFile = await saveFileInContainer(folderUrl, upload, { fetch });
+    return getSourceUrl(savedFile);
+  }));
+  const uploaded = results.filter((result) => result.status === "fulfilled").map((result) => result.value);
+  const failed = results.find((result) => result.status === "rejected");
+  if (failed) {
+    const cleanupErrors = [];
+    for (const imageUrl of uploaded) {
+      try {
+        await deleteFile(imageUrl, { fetch });
+      } catch (error) {
+        cleanupErrors.push(error.message);
+      }
+    }
+    const reason = failed.reason instanceof Error ? failed.reason.message : String(failed.reason);
+    const cleanupMessage = cleanupErrors.length ? ` Image cleanup failed: ${cleanupErrors.join("; ")}` : "";
+    throw new Error(`Couldn't upload a deck image: ${reason}.${cleanupMessage}`);
+  }
+  return uploaded;
+}
+
+export async function uploadDeckImage(deckUrl, file) {
+  const [imageUrl] = await uploadDeckImages(deckUrl, [file]);
+  return imageUrl;
+}
+
+// Make every file in the deck's folder readable by everyone (readable = true) or only by the owner.
+// The folder's permission file (ACL) is edited, so new images inherit the setting automatically.
+export async function setDeckImagesDefaultAccess(deckUrl, readable) {
+  const fetch = getSolidFetch();
+  const { folderUrl } = getDeckFolderInfo(deckUrl);
+  await ensureContainer(folderUrl, fetch);
+  await setDeckImagesDefaultAccessInFolder(folderUrl, readable, fetch);
+}
+
 // Make the images follow the deck's visibility. Does nothing if the deck has no images.
 // Called by sharing.js when the user switches between Public and Private.
 export async function syncDeckImagesAccess(deckUrl, readable) {
@@ -158,14 +185,30 @@ export async function syncDeckImagesAccess(deckUrl, readable) {
 // Download an image (logged in, so private decks work) as a Blob the browser can show.
 // components.jsx calls this instead of importing the Solid library itself.
 export function loadDeckImage(imageUrl) {
-  return getFile(imageUrl, { fetch: getSolidFetch() });
+  let filePromise = deckImageCache.get(imageUrl);
+  if (!filePromise) {
+    filePromise = getFile(imageUrl, { fetch: getSolidFetch() });
+    deckImageCache.set(imageUrl, filePromise);
+    filePromise.catch(() => {
+      if (deckImageCache.get(imageUrl) === filePromise) deckImageCache.delete(imageUrl);
+    });
+  }
+  return filePromise;
 }
 
 // Copy an image into another deck's folder (used when cloning). -> URL of the new copy
 export async function copyDeckImage(imageUrl, targetDeckUrl) {
-  const file = await getFile(imageUrl, { fetch: getSolidFetch() });
-  const copy = new File([file], "image", { type: file.type });
-  return uploadDeckImage(targetDeckUrl, copy);
+  const [copyUrl] = await copyDeckImages([imageUrl], targetDeckUrl);
+  return copyUrl;
+}
+
+export async function copyDeckImages(imageUrls, targetDeckUrl) {
+  const fetch = getSolidFetch();
+  const files = await Promise.all(imageUrls.map(async (imageUrl) => {
+    const file = await getFile(imageUrl, { fetch });
+    return new File([file], "image", { type: file.type });
+  }));
+  return uploadDeckImages(targetDeckUrl, files);
 }
 
 // Delete one image, but only if it is inside this deck's own folder.
@@ -255,12 +298,9 @@ export async function listDecks(containerUrl) {
   const container = await getSolidDataset(containerUrl, { fetch });
   const deckFolders = getContainedResourceUrlAll(container)
     .filter((url) => new URL(url).pathname.endsWith("/"));
-  const urls = [];
-  for (const folderUrl of deckFolders) {
-    const folder = await getSolidDataset(folderUrl, { fetch });
-    urls.push(...getContainedResourceUrlAll(folder)
-      .filter((url) => url.toLowerCase().endsWith(".ttl")));
-  }
+  const folders = await Promise.all(deckFolders.map((folderUrl) => getSolidDataset(folderUrl, { fetch })));
+  const urls = folders.flatMap((folder) => getContainedResourceUrlAll(folder)
+    .filter((url) => url.toLowerCase().endsWith(".ttl")));
 
   // Open every file to get its name and card count.
   const results = await Promise.allSettled(urls.map(async (url) => {
@@ -330,7 +370,7 @@ function makeDeckThings(deckUrl, deck) {
 }
 
 // Save a deck to its file. Creates the file the first time, replaces the content afterwards.
-export async function saveDeck(deckUrl, deck) {
+export async function saveDeck(deckUrl, deck, { imagesAccessPrepared = false } = {}) {
   getDeckFolderInfo(deckUrl);
   const fetch = getSolidFetch();
   let dataset;
@@ -349,7 +389,7 @@ export async function saveDeck(deckUrl, deck) {
   }
 
   const hasImages = deck.cards.some((card) => card.image && isOwnedDeckImage(deckUrl, card.image));
-  if (hasImages && existingDeck) {
+  if (hasImages && existingDeck && !imagesAccessPrepared) {
     const currentAccess = await getPublicAccess(deckUrl, { fetch });
     if (currentAccess) await setDeckImagesDefaultAccess(deckUrl, currentAccess.read);
   }
