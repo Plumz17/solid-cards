@@ -486,6 +486,11 @@ label {
   gap: 10px;
 }
 
+/* ---------- Friends: WebIDs are long, so they wrap; each public deck is a row inside the friend's tile ---------- */
+.friend-id { font-size: 0.8rem; word-break: break-all; margin: 0; }
+.friend-deck { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-top: 12px; margin-top: 12px; border-top: 2px solid var(--border); }
+.friend-deck p { margin: 0; }
+
 /* ---------- Mobile: thumb-friendly layout, not just a narrower desktop ---------- */
 @media (max-width: 560px) {
   #app { padding: 14px 14px 40px; }

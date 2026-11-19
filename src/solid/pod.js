@@ -30,6 +30,7 @@ import {
 } from "@inrupt/solid-client";
 import { getPublicAccess, setPublicAccess } from "@inrupt/solid-client/universal";
 import { getSolidFetch } from "./auth.js";
+import { removeFromIndex } from "./sharing.js";
 
 // Pod access: the only place decks are read from and written to the pod. Everything returned to the
 // screens is a plain object; the Turtle/RDF details stay inside this file.
@@ -233,19 +234,25 @@ export async function getDeckImageUrls(deckUrl) {
     .filter((url) => url && isOwnedDeckImage(deckUrl, url));
 }
 
-// Find the user's pod and make sure <pod>/solidcard/decks/ exists. -> URL of the decks folder
-export async function ensureDecksContainer(webId) {
-  const fetch = getSolidFetch();
+// Read a WebID's profile and find where that person's pod starts. -> pod root URL, ending in "/"
+// Works for anyone's profile (profiles are public), so it is also used to look up friends.
+export async function findStorage(webId) {
   // Read the profile document and look up where the pod's root folder is.
-  const profile = await getSolidDataset(webId, { fetch });
+  const profile = await getSolidDataset(webId, { fetch: getSolidFetch() });
   const person = getThing(profile, webId);
   const storageUrl = person && getUrl(person, STORAGE);
   if (!storageUrl) {
     throw new Error(`No pod storage location is listed in the profile for ${webId}.`);
   }
+  return storageUrl.endsWith("/") ? storageUrl : `${storageUrl}/`;
+}
+
+// Find the user's pod and make sure <pod>/solidcard/decks/ exists. -> URL of the decks folder
+export async function ensureDecksContainer(webId) {
+  const fetch = getSolidFetch();
+  const storage = await findStorage(webId);
 
   // Build the fixed path <pod>/solidcard/decks/ and create each folder if it is missing.
-  const storage = storageUrl.endsWith("/") ? storageUrl : `${storageUrl}/`;
   const appContainer = new URL("solidcard/", storage).href;
   const decksContainer = new URL("decks/", appContainer).href;
   await ensureContainer(appContainer, fetch);
@@ -399,7 +406,7 @@ export async function saveDeck(deckUrl, deck, { imagesAccessPrepared = false } =
   await saveSolidDatasetAt(deckUrl, dataset, { fetch });
 }
 
-// Delete a deck completely: its images first, then the .ttl file, then the (now empty) folder.
+// Delete a deck, its images, and its public-index entry.
 export async function deleteDeck(deckUrl) {
   const fetch = getSolidFetch();
   const { folderUrl } = getDeckFolderInfo(deckUrl);
@@ -410,6 +417,7 @@ export async function deleteDeck(deckUrl) {
   await deleteFile(deckUrl, { fetch });
 
   await deleteContainer(folderUrl, { fetch });
+  await removeFromIndex(deckUrl);
 }
 
 // Pick a file URL for a new deck: the name as a readable file name, with _2, _3... if it is taken.

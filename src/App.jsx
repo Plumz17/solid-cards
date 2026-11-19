@@ -6,11 +6,12 @@ import { ensureDecksContainer } from "./solid/pod.js";
 import MyDecks from "./views/MyDecks.jsx";
 import DeckEditor from "./views/DeckEditor.jsx";
 import DeckPreview from "./views/DeckPreview.jsx";
+import Friends from "./views/Friends.jsx";
 import Study from "./views/Study.jsx";
 import Login from "./views/Login.jsx";
 import { ErrorBox, Loading } from "./components.jsx";
 
-// Which screen is showing: { name: "list" | "edit" | "preview" | "study", url, from }
+// Which screen is showing: { name: "list" | "edit" | "preview" | "study" | "friends", url, from }
 // Opening an app link (?deck=...) starts on the preview.
 export default function App() {
   // --- Things the app remembers (changing one redraws the screen) ---
@@ -96,7 +97,10 @@ export default function App() {
 
       {/* Screens that need the decks folder */}
       {container && view.name === "list" && (
-        <MyDecks container={container} decks={decks} setDecks={setDecks} onOpen={(u) => go("edit", u)} onNew={() => go("edit")} onPreview={(u) => go("preview", u)} onStudy={(u) => go("study", u)} />
+        <MyDecks container={container} decks={decks} setDecks={setDecks} onOpen={(u) => go("edit", u)} onNew={() => go("edit")} onPreview={(u) => go("preview", u)} onStudy={(u) => go("study", u)} onFriends={() => go("friends")} />
+      )}
+      {container && view.name === "friends" && (
+        <Friends container={container} webId={user.webId} onBack={() => go("list")} onPreview={(u) => go("preview", u)} onStudy={(u) => go("study", u)} />
       )}
       {/* key = deck URL, so switching decks starts a fresh editor */}
       {container && view.name === "edit" && (
@@ -105,7 +109,7 @@ export default function App() {
 
       {/* Read-only screens: work logged out too (Clone needs the decks folder, so it stays disabled without one) */}
       {!checking && view.name === "preview" && (
-        <DeckPreview deckUrl={view.url} container={container} loggedIn={!!user} onBack={() => go("list")} onOpen={(u) => go("edit", u)} onStudy={(u) => go("study", u)} onDecksChanged={() => setDecks(null)} notify={notify} />
+        <DeckPreview deckUrl={view.url} container={container} loggedIn={!!user} onBack={back} onOpen={(u) => go("edit", u)} onStudy={(u) => go("study", u)} onDecksChanged={() => setDecks(null)} notify={notify} />
       )}
       {!checking && view.name === "study" && <Study deckUrl={view.url} onBack={back} />}
 

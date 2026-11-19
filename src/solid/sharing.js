@@ -1,6 +1,7 @@
 import { getPublicAccess, setPublicAccess } from "@inrupt/solid-client/universal";
 import { getSolidFetch } from "./auth.js";
 import { syncDeckImagesAccess } from "./pod.js";
+import { editList } from "./list.js";
 
 // Visibility is the file's permission in the pod, not something stored in the deck.
 // Is the deck readable by everyone? -> "public" or "private"
@@ -27,6 +28,25 @@ export async function setVisibility(deckUrl, mode) {
   };
 
   await updateDeckAccess();
+  // Keep the public index in step, so friends who follow me can find this deck.
+  if (mode === "public") await addToIndex(deckUrl);
+  else await removeFromIndex(deckUrl);
+}
+
+// The public index: <pod>/solidcard/public.ttl lists my public decks. A friend can't open my decks
+// folder (it is private), so they read this one public file instead. It sits next to the decks folder: deck = <pod>/solidcard/decks/<name>/<name>.ttl, so two levels up.
+const HAS_PART = "https://schema.org/hasPart";
+const indexUrl = (deckUrl) => new URL("../../public.ttl", deckUrl).href;
+
+// Put a deck on the index. The index file itself must be readable by everyone, or friends can't see it.
+async function addToIndex(deckUrl) {
+  await editList(indexUrl(deckUrl), HAS_PART, deckUrl, true);
+  await setPublicAccess(indexUrl(deckUrl), { read: true, write: false, append: false }, { fetch: getSolidFetch() });
+}
+
+// Take a deck off the index (also used when a deck is deleted).
+export async function removeFromIndex(deckUrl) {
+  await editList(indexUrl(deckUrl), HAS_PART, deckUrl, false);
 }
 
 // App link = this site + ?deck=<encoded deck file URL>
