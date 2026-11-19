@@ -5,6 +5,7 @@ export async function cloneDeck(sourceUrl, myContainerUrl) {
   const source = await loadDeck(sourceUrl);
   // The copy goes into a new folder in my own pod; its images are copied there one by one.
   const url = await newDeckUrl(myContainerUrl, source.name);
+  // Copy every card; the text stays the same, the images are replaced by their new copies in my pod.
   const cards = [];
   for (const card of source.cards) {
     cards.push({

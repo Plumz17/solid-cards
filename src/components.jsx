@@ -49,22 +49,28 @@ export function VisibilityBadge({ mode }) {
   return <span className={`badge badge-${mode}`}><Icon name={mode === "public" ? "globe" : "lock"} /> {mode === "public" ? "Public" : "Private"}</span>;
 }
 
+// Shows a card image. `source` is either a pod URL (downloaded with the user's login, so private decks work)
+// or a File the user just picked (shown straight away, before it is saved).
 export function DeckImage({ source, alt = "Card image" }) {
+  // State: the address the <img> can show, and whether loading failed.
   const [imageUrl, setImageUrl] = useState("");
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
+    // `active` stops a slow download from updating the screen after the card changed or closed.
     let active = true;
     let objectUrl;
     setImageUrl("");
     setFailed(false);
     if (!source) return undefined;
 
+    // A File/Blob is used as it is; a URL is downloaded from the pod.
     const filePromise = source instanceof Blob
       ? Promise.resolve(source)
       : loadDeckImage(source);
     filePromise
       .then((file) => {
+        // The downloaded file becomes a temporary browser address (blob:...) that <img> can show.
         objectUrl = URL.createObjectURL(file);
         if (active) setImageUrl(objectUrl);
         else URL.revokeObjectURL(objectUrl);
@@ -74,11 +80,13 @@ export function DeckImage({ source, alt = "Card image" }) {
       });
 
     return () => {
+      // Cleanup: ignore late answers and free the temporary address (otherwise it leaks memory).
       active = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [source]);
 
+  // What to show: nothing, an error text, a loading text, or the image itself.
   if (!source) return null;
   if (failed) return <span className="image-unavailable">Image unavailable</span>;
   if (!imageUrl) return <span className="image-loading">Loading image…</span>;

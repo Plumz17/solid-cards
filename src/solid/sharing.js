@@ -6,6 +6,7 @@ import { syncDeckImagesAccess } from "./pod.js";
 // Is the deck readable by everyone? -> "public" or "private"
 export async function getVisibility(deckUrl) {
   const access = await getPublicAccess(deckUrl, { fetch: getSolidFetch() });
+  // Ask the pod what "everyone" may do with this file: { read, write, append }, or null if it can't be read.
   if (!access) throw new Error("Couldn't read this deck's sharing permissions.");
   return access.read ? "public" : "private";
 }
@@ -13,8 +14,10 @@ export async function getVisibility(deckUrl) {
 // Make the deck public (everyone can read, nobody else can change it) or private (owner only).
 export async function setVisibility(deckUrl, mode) {
   const fetch = getSolidFetch();
+  // Images first, so a public deck never shows broken images.
   await syncDeckImagesAccess(deckUrl, mode === "public");
   const updateDeckAccess = async () => {
+    // read = true only for public; write and append are always false, so nobody else can edit the deck.
     const access = await setPublicAccess(deckUrl, {
       read: mode === "public",
       write: false,

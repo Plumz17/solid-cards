@@ -194,6 +194,7 @@ export default function DeckEditor({ container, deckUrl, onOpen, onStudy, onBack
           <input value={c.front} onChange={(e) => setCard(i, "front", e.target.value)} />
           <label>Back</label>
           <input value={c.back} onChange={(e) => setCard(i, "back", e.target.value)} />
+          {/* Two image slots per card (front and back); the same code runs for both. */}
           {[
             { key: "image", fileKey: "imageFile", label: "Front image" },
             { key: "backImage", fileKey: "backImageFile", label: "Back image" },
@@ -205,8 +206,10 @@ export default function DeckEditor({ container, deckUrl, onOpen, onStudy, onBack
                 type="file"
                 accept="image/jpeg,image/png,image/gif,image/webp"
                 disabled={busy}
+                // Check the picked file; it is only uploaded when the deck is saved.
                 onChange={(e) => {
                   const file = e.target.files[0];
+                  // Clear the input so picking the same file again still triggers onChange.
                   e.target.value = "";
                   if (!file) return;
                   try {
@@ -217,6 +220,7 @@ export default function DeckEditor({ container, deckUrl, onOpen, onStudy, onBack
                   }
                 }}
               />
+              {/* Preview: a newly picked file if there is one, otherwise the saved image, with a remove button */}
               {(c[fileKey] || c[key]) && (
                 <div className="image-editor">
                   <DeckImage source={c[fileKey] ?? c[key]} alt={`${label} for card ${i + 1}`} />

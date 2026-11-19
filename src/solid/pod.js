@@ -38,12 +38,14 @@ import { getSolidFetch } from "./auth.js";
 const STORAGE = "http://www.w3.org/ns/pim/space#storage"; // profile field that points to the pod root
 const SCHEMA = "https://schema.org/";                     // vocabulary used for decks and cards
 const DECK_SUFFIX = "#deck";                              // the deck itself is the "#deck" entry of its file
+// Image types a card may use, mapped to the file extension we save them with.
 const IMAGE_TYPES = new Map([
   ["image/jpeg", "jpg"],
   ["image/png", "png"],
   ["image/gif", "gif"],
   ["image/webp", "webp"],
 ]);
+// Largest image allowed (5 MB), so the pod doesn't fill up with huge files.
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
 // Does something exist at this URL? true = yes, false = 404, anything else (e.g. 403) is an error.
@@ -63,6 +65,8 @@ async function ensureContainer(url, fetch) {
   await createContainerAt(url, { fetch });
 }
 
+// Every deck lives in its own folder: <pod>/solidcard/decks/<name>/<name>.ttl.
+// Returns that folder's URL, and refuses any other location so the app only touches its own files.
 function getDeckFolderInfo(deckUrl) {
   const parsed = new URL(deckUrl);
   const parentUrl = new URL(".", parsed);
@@ -72,6 +76,8 @@ function getDeckFolderInfo(deckUrl) {
   return { folderUrl: parentUrl.href };
 }
 
+// Is this image stored in the deck's own folder? A deck file could point at any URL, so images
+// from anywhere else are ignored (never shown from the file, copied or deleted).
 function isOwnedDeckImage(deckUrl, imageUrl) {
   const { folderUrl } = getDeckFolderInfo(deckUrl);
   const folder = new URL(folderUrl);
@@ -79,6 +85,7 @@ function isOwnedDeckImage(deckUrl, imageUrl) {
   return image.origin === folder.origin && image.pathname.startsWith(folder.pathname);
 }
 
+// Check an image before uploading it: allowed type and size. Throws a readable message if not.
 export function validateDeckImage(file) {
   if (!IMAGE_TYPES.has(file.type)) {
     throw new Error("Choose a JPEG, PNG, GIF, or WebP image.");
@@ -88,12 +95,15 @@ export function validateDeckImage(file) {
   }
 }
 
+// Upload an image into the deck's folder. -> URL of the saved image
+// The folder's access is set first, so a public deck's new image is public too.
 export async function uploadDeckImage(deckUrl, file) {
   validateDeckImage(file);
   const fetch = getSolidFetch();
   const { folderUrl } = getDeckFolderInfo(deckUrl);
   await ensureContainer(folderUrl, fetch);
 
+  // Existing deck: the folder follows the deck's current visibility. New deck: start private.
   const deckExists = await resourceExists(deckUrl, fetch);
   if (deckExists) {
     const deckAccess = await getPublicAccess(deckUrl, { fetch });
@@ -102,12 +112,15 @@ export async function uploadDeckImage(deckUrl, file) {
     await setDeckImagesDefaultAccess(deckUrl, false);
   }
 
+  // A random file name, so two images never overwrite each other (and the original name isn't leaked).
   const filename = `image-${crypto.randomUUID()}.${IMAGE_TYPES.get(file.type)}`;
   const upload = new File([file], filename, { type: file.type });
   const savedFile = await saveFileInContainer(folderUrl, upload, { fetch });
   return getSourceUrl(savedFile);
 }
 
+// Make every file in the deck's folder readable by everyone (readable = true) or only by the owner.
+// The folder's permission file (ACL) is edited, so new images inherit the setting automatically.
 export async function setDeckImagesDefaultAccess(deckUrl, readable) {
   const fetch = getSolidFetch();
   const { folderUrl } = getDeckFolderInfo(deckUrl);
@@ -117,6 +130,7 @@ export async function setDeckImagesDefaultAccess(deckUrl, readable) {
     throw new Error(`Couldn't access the permissions for deck folder ${folderUrl}.`);
   }
 
+  // Use the folder's own ACL, or start one from the inherited (fallback) ACL if it has none yet.
   let acl = getResourceAcl(folder);
   if (!acl) {
     if (!hasFallbackAcl(folder) || !getFallbackAcl(folder)) {
@@ -134,6 +148,8 @@ export async function setDeckImagesDefaultAccess(deckUrl, readable) {
   await saveAclFor(folder, updatedAcl, { fetch });
 }
 
+// Make the images follow the deck's visibility. Does nothing if the deck has no images.
+// Called by sharing.js when the user switches between Public and Private.
 export async function syncDeckImagesAccess(deckUrl, readable) {
   const imageUrls = await getDeckImageUrls(deckUrl);
   if (imageUrls.length) await setDeckImagesDefaultAccess(deckUrl, readable);
@@ -145,17 +161,20 @@ export function loadDeckImage(imageUrl) {
   return getFile(imageUrl, { fetch: getSolidFetch() });
 }
 
+// Copy an image into another deck's folder (used when cloning). -> URL of the new copy
 export async function copyDeckImage(imageUrl, targetDeckUrl) {
   const file = await getFile(imageUrl, { fetch: getSolidFetch() });
   const copy = new File([file], "image", { type: file.type });
   return uploadDeckImage(targetDeckUrl, copy);
 }
 
+// Delete one image, but only if it is inside this deck's own folder.
 export async function deleteDeckImage(deckUrl, imageUrl) {
   if (!isOwnedDeckImage(deckUrl, imageUrl)) return;
   await deleteFile(imageUrl, { fetch: getSolidFetch() });
 }
 
+// List every image URL the deck's cards use (front and back), keeping only the ones in its own folder.
 export async function getDeckImageUrls(deckUrl) {
   const dataset = await getSolidDataset(deckUrl, { fetch: getSolidFetch() });
   const deckThing = getThing(dataset, `${deckUrl}${DECK_SUFFIX}`);
@@ -340,7 +359,7 @@ export async function saveDeck(deckUrl, deck) {
   await saveSolidDatasetAt(deckUrl, dataset, { fetch });
 }
 
-// Delete the deck's file from the pod.
+// Delete a deck completely: its images first, then the .ttl file, then the (now empty) folder.
 export async function deleteDeck(deckUrl) {
   const fetch = getSolidFetch();
   const { folderUrl } = getDeckFolderInfo(deckUrl);
